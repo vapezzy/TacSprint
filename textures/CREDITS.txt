@@ -1,0 +1,4 @@
+Texture maps and sky from Poly Haven (https://polyhaven.com), licence CC0.
+  blue_metal_plate, denim_fabric, stretch_poplin, brown_leather, rubberized_track,
+  hangar_concrete_floor, rusty_metal_02, weathered_planks, dirty_concrete (2k maps)
+  kloofendal_48d_partly_cloudy_puresky (2k HDRI)

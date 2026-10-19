@@ -1,0 +1,71 @@
+# Builds an unsigned Tac Sprint .ipa for TrollStore on every push to main
+# (or by hand under Actions -> "iOS IPA" -> Run workflow). The file lands as a
+# download under the run's "Artifacts"; a pushed tag like v1.0 also makes a release.
+name: iOS IPA
+
+on:
+  push:
+    branches: [main]
+    tags: ["v*"]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+env:
+  GODOT_VERSION: "4.7.2"
+
+jobs:
+  ipa:
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Godot and export templates
+        run: |
+          base="https://github.com/godotengine/godot/releases/download/${GODOT_VERSION}-stable"
+          curl -sSfL -o godot.zip "$base/Godot_v${GODOT_VERSION}-stable_macos.universal.zip"
+          unzip -q godot.zip
+          curl -sSfL -o templates.tpz "$base/Godot_v${GODOT_VERSION}-stable_export_templates.tpz"
+          dest="$HOME/Library/Application Support/Godot/export_templates/${GODOT_VERSION}.stable"
+          mkdir -p "$dest"
+          unzip -q templates.tpz -d tpl
+          mv tpl/templates/* "$dest/"
+          rm -rf godot.zip templates.tpz tpl
+
+      - name: Export Xcode project
+        run: |
+          mkdir -p build/ios
+          ./Godot.app/Contents/MacOS/Godot --headless --path . --import || true
+          ./Godot.app/Contents/MacOS/Godot --headless --path . --export-release "iOS" build/ios/TacSprint.ipa
+          ls build/ios
+
+      - name: Build app without signing
+        run: |
+          xcodebuild -project build/ios/TacSprint.xcodeproj -scheme TacSprint \
+            -configuration Release -sdk iphoneos -destination generic/platform=iOS \
+            -derivedDataPath build/dd \
+            CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY="" \
+            DEVELOPMENT_TEAM="" build | tail -n 40
+
+      - name: Fakesign and package
+        run: |
+          brew install ldid
+          app=$(find build/dd/Build/Products -maxdepth 2 -name "*.app" -type d | head -1)
+          echo "app: $app"
+          ldid -S "$app/$(basename "$app" .app)"
+          rm -rf Payload && mkdir Payload
+          cp -R "$app" Payload/
+          zip -qry TacSprint.ipa Payload
+          ls -lh TacSprint.ipa
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: TacSprint-ipa
+          path: TacSprint.ipa
+
+      - name: Release (tags only)
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: TacSprint.ipa
