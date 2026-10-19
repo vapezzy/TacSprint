@@ -24,8 +24,10 @@ jobs:
       - name: Godot and export templates
         run: |
           base="https://github.com/godotengine/godot/releases/download/${GODOT_VERSION}-stable"
+          cd "$RUNNER_TEMP"
           curl -sSfL -o godot.zip "$base/Godot_v${GODOT_VERSION}-stable_macos.universal.zip"
           unzip -q godot.zip
+          echo "GODOT=$RUNNER_TEMP/Godot.app/Contents/MacOS/Godot" >> "$GITHUB_ENV"
           curl -sSfL -o templates.tpz "$base/Godot_v${GODOT_VERSION}-stable_export_templates.tpz"
           dest="$HOME/Library/Application Support/Godot/export_templates/${GODOT_VERSION}.stable"
           mkdir -p "$dest"
@@ -36,9 +38,11 @@ jobs:
       - name: Export Xcode project
         run: |
           mkdir -p build/ios
-          ./Godot.app/Contents/MacOS/Godot --headless --path . --import || true
-          ./Godot.app/Contents/MacOS/Godot --headless --path . --export-release "iOS" build/ios/TacSprint.ipa
-          ls build/ios
+          "$GODOT" --headless --path . --import || true
+          "$GODOT" --headless --path . --export-release "iOS" build/ios/TacSprint.ipa
+          ls -lh build/ios
+          # The game data must be in there (models, textures, sounds): well over 100 MB.
+          test $(stat -f%z build/ios/TacSprint.pck 2>/dev/null || find build/ios -name "*.pck" -exec stat -f%z {} \; | head -1) -gt 100000000
 
       - name: Build app without signing
         run: |
