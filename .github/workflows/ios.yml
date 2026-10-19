@@ -17,9 +17,9 @@ env:
 
 jobs:
   ipa:
-    runs-on: macos-15
+    runs-on: macos-26
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       - name: Godot and export templates
         run: |
@@ -42,6 +42,11 @@ jobs:
 
       - name: Build app without signing
         run: |
+          set -o pipefail
+          # Godot 4.7 is built against the iOS 26 SDK, so use the newest Xcode there is.
+          xc=$(ls -d /Applications/Xcode_26*.app 2>/dev/null | sort -V | tail -1)
+          if [ -n "$xc" ]; then sudo xcode-select -s "$xc"; fi
+          xcodebuild -version
           xcodebuild -project build/ios/TacSprint.xcodeproj -scheme TacSprint \
             -configuration Release -sdk iphoneos -destination generic/platform=iOS \
             -derivedDataPath build/dd \
