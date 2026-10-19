@@ -159,6 +159,8 @@ func _ready() -> void:
 			test_range = true
 		elif a == "--dueltest":
 			duel_test = true
+		elif a.begins_with("--startmode="):
+			next_mode = a.substr(12)    # start straight into a mode, the normal way (for debugging)
 		elif a == "--lantest-host":
 			lan_test = "host"
 		elif a == "--lantest-join":
@@ -184,6 +186,7 @@ func _ready() -> void:
 	if not testing:
 		loading = Loading.new()
 		add_child(loading)
+		get_tree().paused = true      # nothing moves (or shoots) behind the loading screen
 		_start_music()
 		loading.set_progress(0.05, "Starte ...")
 		await get_tree().process_frame
@@ -295,6 +298,7 @@ func _ready() -> void:
 	if loading != null:
 		await _preload_assets()
 		await loading.finish()
+		get_tree().paused = main_menu.is_open
 		if start_now:
 			_music(false)
 	ready_done = true
@@ -2284,7 +2288,9 @@ func _music(on: bool) -> void:
 	var target := linear_to_db(maxf(level, 0.0001)) - 6.0 if (on and level > 0.001) else -60.0
 	if _music_tween != null:
 		_music_tween.kill()
-	_music_tween = create_tween()
+	# On the music player itself: the menu pauses the game, and a tween on a paused
+	# node would never turn the music up.
+	_music_tween = music.create_tween()
 	_music_tween.tween_property(music, "volume_db", target, 1.6 if on else 1.0)
 
 

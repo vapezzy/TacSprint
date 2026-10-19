@@ -203,7 +203,10 @@ func _build_body() -> void:
 # --- finding the way -----------------------------------------------------------
 
 func _build_grid() -> void:
-	grid = build_grid(get_world_3d(), bounds, [get_rid(), target.get_rid()] if target != null else [get_rid()])
+	var skip: Array[RID] = [get_rid()]
+	if target != null:
+		skip.append(target.get_rid())
+	grid = build_grid(get_world_3d(), bounds, skip)
 
 
 # A walking grid over `area`: a cell is blocked where a standing body would not fit.
