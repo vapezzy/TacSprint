@@ -159,6 +159,8 @@ func _ready() -> void:
 			test_range = true
 		elif a == "--dueltest":
 			duel_test = true
+		elif a.begins_with("--sdmap="):
+			SdMap.current = a.substr(8)
 		elif a.begins_with("--startmode="):
 			next_mode = a.substr(12)    # start straight into a mode, the normal way (for debugging)
 		elif a == "--lantest-host":
@@ -211,6 +213,7 @@ func _ready() -> void:
 		add_child(player)
 		player.global_position = Vector3(0, 0.05, 50)
 	elif mode == "snd":
+		SdMap.use(SdMap.current)
 		var map := SdMap.new()
 		add_child(map)
 		add_child(player)
@@ -2212,7 +2215,7 @@ func _run_sd_test() -> void:
 	var mates := sd.bots.filter(func(b: Bot) -> bool: return b.team == sd.attackers)
 	if not mates.is_empty():
 		sd.carrier = mates[0]
-		sd._assign_goals()
+		sd._plan_round()
 	await _save_view("sd_prep")
 	await _wait(4.0)
 	await _save_view("sd_live")

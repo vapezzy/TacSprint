@@ -413,7 +413,7 @@ func _refresh_showcase() -> void:
 # Search and Destroy lobby: fill both teams with bots, pick how good they are.
 func _build_lobby() -> Control:
 	var box := _panel(Vector2(560, 0))
-	box.add_child(_label("SUCHEN & ZERSTÖREN   ·   HAFEN", 24, ACCENT))
+	box.add_child(_label("SUCHEN & ZERSTÖREN", 24, ACCENT))
 	box.add_child(_label("Bombe auf A oder B legen, oder sie entschärfen.\nKein Respawn in der Runde  ·  Seitenwechsel alle 3 Runden  ·  4 Runden gewinnen.", 16, DIM))
 	for row: Array in [["DEIN TEAM  (du + Bots)", "allies", 0, 5, "Mitspieler-Bots: %d   ·   %d gegen ..."], ["GEGNER-TEAM", "enemies", 1, 6, "Gegner-Bots: %d"]]:
 		box.add_child(_label(row[0], 18, ACCENT))
@@ -446,6 +446,17 @@ func _build_lobby() -> Control:
 		line.add_child(value)
 		line.add_child(plus)
 		box.add_child(line)
+	box.add_child(_label("KARTE", 18, ACCENT))
+	var maps := HBoxContainer.new()
+	maps.add_theme_constant_override("separation", 8)
+	var map_group := ButtonGroup.new()
+	for id: String in ["raffinerie", "hafen"]:
+		var mb := _entry(SdMode.SdMap.MAP_NAMES[id], Vector2(258, 50), 20, true)
+		mb.button_group = map_group
+		mb.set_pressed_no_signal(SdMode.SdMap.current == id)
+		mb.pressed.connect(func() -> void: SdMode.SdMap.current = id)
+		maps.add_child(mb)
+	box.add_child(maps)
 	box.add_child(_label("BOT-STÄRKE", 18, ACCENT))
 	var skills := HBoxContainer.new()
 	skills.add_theme_constant_override("separation", 8)
@@ -1204,7 +1215,7 @@ func _process(dt: float) -> void:
 	if search_t < 0.0:
 		return
 	search_t += dt
-	var place: String = {"arena": "Frachthof", "duel": "1v1 me... Bot", "range": "Trainingsplatz", "lan": "LAN 1v1", "snd": "Suchen & Zerstören · Hafen"}[search_mode]
+	var place: String = {"arena": "Frachthof", "duel": "1v1 me... Bot", "range": "Trainingsplatz", "lan": "LAN 1v1", "snd": "Suchen & Zerstören · " + SdMode.SdMap.MAP_NAMES[SdMode.SdMap.current]}[search_mode]
 	if search_t < 1.3:
 		search_label.text = "SPIEL WIRD GESUCHT" + ".".repeat(1 + int(search_t * 3.0) % 3)
 	else:

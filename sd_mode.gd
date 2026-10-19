@@ -1,6 +1,6 @@
 extends Node
 
-# Search and Destroy on "Hafen". Two teams, no respawns within a round. The
+# Search and Destroy on the maps in sd_map.gd ("Raffinerie", "Hafen"). Two teams, no respawns within a round. The
 # attackers carry a bomb to site A or B and plant it; the defenders stop them
 # or defuse it. A round is won by wiping out the other side, by the bomb going
 # off (attackers), by defusing it or running out the clock (defenders). Sides
@@ -56,6 +56,11 @@ var spec_cam: Camera3D
 var _spec_i := 0
 var _death_t := 0.0
 var _hunt_t := 0.0
+var grid: AStarGrid2D          # the walking grid all bots share
+var plans := {}                # Bot -> its own plan for this round (see _plan_round)
+var clock := 0.0
+var _contact := [-100.0, -100.0]   # when attackers were last near each site
+var _sense_t := 0.0
 
 var hud: CanvasLayer
 var _score_label: Label
@@ -79,7 +84,7 @@ func setup(game: Node) -> void:
 	main = game
 	player = main.get("player")
 	# One walking grid for everyone, built before anybody stands in the way.
-	var grid := Bot.build_grid(player.get_world_3d(), SdMap.SD_BOUNDS, [player.get_rid()])
+	grid = Bot.build_grid(player.get_world_3d(), SdMap.SD_BOUNDS, [player.get_rid()])
 	for i in allies + enemies:
 		var b := Bot.new()
 		b.team = 0 if i < allies else 1
@@ -204,43 +209,16 @@ func _start_round() -> void:
 		var options := bots.filter(func(b: Bot) -> bool: return b.team == attackers)
 		carrier = options[randi() % options.size()] if not options.is_empty() else null
 	bomb.visible = false
-	_assign_goals()
+	_plan_round()
 	var role := "ANGRIFF" if attackers == 0 else "VERTEIDIGUNG"
 	_show_banner("RUNDE %d  ·  %s" % [round_no, role],
 			("Leg die Bombe auf A oder B  ·  E halten" if attackers == 0 else "Verteidige A und B"), PREP_TIME)
 
 
-func _assign_goals() -> void:
-	var sites: Array = SdMap.SITES
-	var att := bots.filter(func(b: Bot) -> bool: return b.team == attackers and b.alive)
-	var def := bots.filter(func(b: Bot) -> bool: return b.team != attackers and b.alive)
-	var i := 0
-	for b: Bot in att:
-		var site: Vector3 = bomb_at if bomb_site >= 0 else sites[target_site]
-		if carrier == null and bomb_site < 0 and i == 0:
-			b.goal = bomb_at                      # pick the dropped bomb up
-		elif b == carrier:
-			b.goal = site
-		else:
-			var ang := TAU * float(i) / maxf(att.size(), 1.0)
-			b.goal = site + Vector3(cos(ang), 0.0, sin(ang)) * (4.5 if bomb_site >= 0 else 3.0) + Vector3(0, 0, 3.5 if bomb_site < 0 else 0.0)
-		b.watch = Vector3(0, 0, -1)
-		i += 1
-	i = 0
-	for b: Bot in def:
-		if bomb_site >= 0:
-			b.goal = bomb_at + Vector3((i % 3 - 1) * 1.2, 0.0, 0.9 * (i / 3))
-		else:
-			var site: Vector3 = sites[i % 2]
-			var spot := site + Vector3(((i / 2) % 3 - 1) * 3.0, 0.0, 4.0 + 2.0 * float(i / 6))
-			b.goal = spot
-		b.watch = Vector3(0, 0, 1)
-		i += 1
-
-
 func _physics_process(dt: float) -> void:
 	if hud == null:
 		return
+	clock += dt
 	if spectating:
 		_spectate(dt)
 	match phase:
@@ -252,6 +230,7 @@ func _physics_process(dt: float) -> void:
 				for b in bots:
 					b.frozen = false
 		"live", "planted":
+			_drive(dt)
 			_play_round(dt)
 	_update_hud()
 
@@ -270,7 +249,7 @@ func _play_round(dt: float) -> void:
 		carrier = null
 		bomb.global_position = bomb_at
 		bomb.visible = true
-		_assign_goals()
+		_on_bomb_dropped()
 	if carrier == null and bomb_site < 0:
 		var takers: Array = []
 		takers.append_array(bots.filter(func(b: Bot) -> bool: return b.team == attackers and b.alive))
@@ -281,7 +260,7 @@ func _play_round(dt: float) -> void:
 				carrier = t
 				bomb.visible = false
 				_feed_line("%s hat die Bombe" % _name_of(t), BLUE if attackers == 0 else RED)
-				_assign_goals()
+				_on_bomb_taken(t)
 				break
 	if phase == "live":
 		# Planting: the carrier inside a site, still, for PLANT_TIME.
@@ -335,17 +314,19 @@ func _play_round(dt: float) -> void:
 		_end_round(1 - attackers, "Zeit abgelaufen")
 
 
-# When a round drags on (45 s without a decision), the bots stop holding and go
-# after the enemies that are left; the bomb carrier and those at a planted bomb
-# keep their jobs.
+# When a round drags on, the bots stop holding and go after the enemies that are
+# left, each after its own patience runs out (35 to 70 s). The bomb carrier and,
+# once it is planted, everybody (guarding it, or going for it) keep their jobs.
 func _hunt() -> void:
-	if phase == "live" and timer > ROUND_TIME - 45.0:
+	if phase != "live":
 		return
+	var since := ROUND_TIME - timer
 	for b in bots:
-		if not b.alive or b.has_los or b == carrier:
+		if not b.alive or b.has_los or b == carrier or not plans.has(b):
 			continue
-		if phase == "planted" and b.team != attackers:
-			continue          # defenders keep going for the bomb
+		var plan: Dictionary = plans[b]
+		if since < float(plan["hunt_after"]) or plan["role"] == "fetch":
+			continue
 		var best: Node3D = null
 		var best_d := INF
 		for e: Node3D in enemies_of(b):
@@ -354,7 +335,11 @@ func _hunt() -> void:
 				best = e
 				best_d = d
 		if best != null:
-			b.goal = best.global_position
+			var p2 := _new_plan("hunt", [_free(best.global_position)], best.global_position, 0.0)
+			p2["hunt_after"] = plan["hunt_after"]
+			p2["site"] = plan["site"]
+			p2["react_at"] = -1.0
+			plans[b] = p2
 
 
 func _site_at(pos: Vector3) -> int:
@@ -376,7 +361,7 @@ func _plant(site: int) -> void:
 	plant_p = 0.0
 	_beep = 0.0
 	_show_banner("BOMBE GELEGT", "Bombenplatz %s  ·  %d Sekunden" % [SdMap.SITE_NAMES[site], int(BOMB_TIME)], 2.5)
-	_assign_goals()
+	_on_planted()
 
 
 func _explode() -> void:
@@ -757,3 +742,313 @@ func minimap_dots() -> Array:
 	if bomb.visible:
 		out.append([bomb.global_position, Color(1.0, 0.85, 0.2)])
 	return out
+
+
+# --- the bots: each one plays on its own -------------------------------------------------
+# Nobody moves as a squad. At the start of every round each bot gets its own
+# plan: a role, a lane, a route of waypoints and a spot to hold, plus its own
+# timing. Attackers: the carrier takes a lane to the target site, entries go
+# early, supports leave later (often by another lane), lurkers sit off to the
+# side to catch rotations. Defenders: anchors hold a site and shift between
+# spots, forwards take an aggressive spot in a lane and fall back later,
+# rotators sit between and go wherever there is contact. Everyone stops to
+# check corners now and then, reacts to what happens with a delay of their own,
+# and goes hunting at a time of their own when the round drags on.
+
+func _v3(v: Vector2) -> Vector3:
+	return _free(Vector3(v.x, 0.05, v.y))
+
+
+# The nearest walkable point (a waypoint may sit a little inside cover).
+func _free(p: Vector3) -> Vector3:
+	if grid == null:
+		return p
+	var b := SdMap.SD_BOUNDS
+	var c := Vector2i(int((p.x - b.position.x) / Bot.CELL), int((p.z - b.position.y) / Bot.CELL))
+	c = c.clamp(Vector2i.ZERO, grid.region.size - Vector2i.ONE)
+	if not grid.is_point_solid(c):
+		return p
+	for r in range(1, 10):
+		for dz in range(-r, r + 1):
+			for dx in range(-r, r + 1):
+				var n := c + Vector2i(dx, dz)
+				if grid.region.has_point(n) and not grid.is_point_solid(n):
+					var at := grid.offset + Vector2(n) * Bot.CELL
+					return Vector3(at.x, 0.05, at.y)
+	return p
+
+
+func _route(points: Array) -> Array:
+	var out := []
+	for v: Vector2 in points:
+		out.append(_v3(v))
+	return out
+
+
+func _new_plan(role: String, route: Array, look: Vector3, wait: float) -> Dictionary:
+	return {"role": role, "route": route, "i": 0, "wait": wait, "look": look, "stuck": 0.0,
+			"last": Vector3.INF, "pause_p": randf_range(0.1, 0.4), "until": INF, "react_at": INF,
+			"react_site": -1, "site": -1, "hunt_after": randf_range(35.0, 70.0)}
+
+
+func _site_point(site: int, spread: float) -> Vector3:
+	var s: Vector3 = SdMap.SITES[site]
+	var a := randf() * TAU
+	return _free(s + Vector3(cos(a), 0.0, sin(a)) * randf() * spread)
+
+
+func _lanes_to(site: int) -> Array:
+	var nav: Dictionary = SdMap.NAV
+	var out := []
+	for lane: String in nav["lanes"]:
+		if int(nav["lane_site"][lane]) == site:
+			out.append(lane)
+	return out
+
+
+# Up a lane and in through that lane's entrance.
+func _attack_route(lane: String, site: int) -> Array:
+	var nav: Dictionary = SdMap.NAV
+	var pts: Array = (nav["lanes"][lane] as Array).duplicate()
+	var entries: Dictionary = nav["entries"][site]
+	if entries.has(lane):
+		pts.append_array(entries[lane])
+	else:
+		# A lane that leads to the other site: cross over through its end.
+		pts.append_array(entries.values()[0])
+	# Each bot starts its lane from a slightly different line.
+	var out := _route(pts)
+	for i in out.size() - 1:
+		out[i] = _free(out[i] + Vector3(randf_range(-1.2, 1.2), 0.0, randf_range(-1.2, 1.2)))
+	return out
+
+
+func _hold_spot(site: int, avoid: Array) -> Array:
+	var holds: Array = SdMap.NAV["holds"][site]
+	var free := holds.filter(func(h: Array) -> bool: return not avoid.has(h))
+	var pick: Array = (free if not free.is_empty() else holds).pick_random()
+	return pick
+
+
+func _plan_round() -> void:
+	plans.clear()
+	_contact = [-100.0, -100.0]
+	var nav: Dictionary = SdMap.NAV
+	var att := bots.filter(func(b: Bot) -> bool: return b.team == attackers)
+	var def := bots.filter(func(b: Bot) -> bool: return b.team != attackers)
+	att.shuffle()
+	def.shuffle()
+	var defend_look := Vector3(0, 0, -30)
+	# Attackers.
+	var lurkers := 0
+	for b: Bot in att:
+		var role: String = "carrier" if b == carrier else ["entry", "entry", "support", "support", "support", "lurk"].pick_random()
+		if role == "lurk" and lurkers >= maxi(1, att.size() / 3):
+			role = "support"
+		var site := target_site
+		var lane: String = _lanes_to(site).pick_random()
+		var plan: Dictionary
+		match role:
+			"carrier":
+				var r := _attack_route(lane, site)
+				r.append(_free(SdMap.SITES[site]))
+				plan = _new_plan(role, r, defend_look, randf_range(0.3, 2.5))
+			"entry":
+				var r := _attack_route(lane, site)
+				r.append(_site_point(site, 4.0))
+				plan = _new_plan(role, r, defend_look, randf_range(0.0, 1.2))
+				plan["pause_p"] = 0.08
+			"support":
+				# Often by another lane: a fake, or to pinch from two sides.
+				if randf() < 0.4:
+					lane = (nav["lanes"] as Dictionary).keys().pick_random()
+				var r := _attack_route(lane, site)
+				r.append(_site_point(site, 5.0))
+				plan = _new_plan(role, r, defend_look, randf_range(2.0, 8.0))
+			"lurk":
+				lurkers += 1
+				var spot: Array = (nav["lurk"] as Array).pick_random()
+				var r := _route([spot[0]])
+				plan = _new_plan(role, r, _v3(spot[1]), randf_range(0.0, 4.0))
+				plan["until"] = clock + PREP_TIME + randf_range(25.0, 45.0)
+		plan["site"] = site
+		plans[b] = plan
+	# Defenders: one anchor per site first, the rest pick their own job.
+	var taken := []
+	var forwards: Array = (nav["forward"] as Array).duplicate()
+	forwards.shuffle()
+	for i in def.size():
+		var b: Bot = def[i]
+		var role: String = "anchor" if i < 2 else ["anchor", "anchor", "forward", "forward", "rotator"].pick_random()
+		if role == "forward" and forwards.is_empty():
+			role = "anchor"
+		var site := i % 2 if i < 2 else randi() % 2
+		var plan: Dictionary
+		match role:
+			"anchor", "rotator":
+				var hold := _hold_spot(site, taken)
+				taken.append(hold)
+				plan = _new_plan(role, _route([hold[0]]), _v3(hold[1]), randf_range(0.0, 1.5))
+				plan["until"] = clock + PREP_TIME + randf_range(8.0, 18.0)
+			"forward":
+				var spot: Array = forwards.pop_back()
+				plan = _new_plan(role, _route([spot[0]]), _v3(spot[1]), randf_range(0.0, 0.8))
+				plan["until"] = clock + PREP_TIME + randf_range(14.0, 32.0)
+				site = 0 if spot[0].x < 0.0 else 1
+		plan["site"] = site
+		plans[b] = plan
+
+
+# The bomb lies on the ground: whoever of the attackers is closest goes for it.
+func _on_bomb_dropped() -> void:
+	var best: Bot = null
+	var best_d := INF
+	for b in bots:
+		if b.team == attackers and b.alive:
+			var d := b.global_position.distance_to(bomb_at)
+			if d < best_d:
+				best = b
+				best_d = d
+	if best != null:
+		var plan := _new_plan("fetch", [_free(bomb_at)], bomb_at, randf_range(0.2, 1.0))
+		plan["site"] = target_site
+		plans[best] = plan
+
+
+func _on_bomb_taken(t: Node3D) -> void:
+	if t is Bot:
+		var r := [_site_point(target_site, 0.5)]
+		var plan := _new_plan("carrier", r, Vector3(0, 0, -30), 0.0)
+		plan["site"] = target_site
+		plan["pause_p"] = 0.05
+		plans[t] = plan
+
+
+# Planted: attackers spread over their own spots round the bomb; defenders come
+# back for it, each in their own time and some by a spot near the site first.
+func _on_planted() -> void:
+	var nav: Dictionary = SdMap.NAV
+	var spots: Array = (nav["postplant"][bomb_site] as Array).duplicate()
+	spots.shuffle()
+	for b in bots:
+		if not b.alive:
+			continue
+		var plan: Dictionary
+		if b.team == attackers:
+			var spot: Array = spots.pop_back() if not spots.is_empty() else [Vector2(bomb_at.x, bomb_at.z), Vector2(0, -30)]
+			plan = _new_plan("postplant", _route([spot[0]]), _v3(spot[1]), randf_range(0.0, 1.5))
+		else:
+			var r := []
+			if randf() < 0.5:
+				var hold := _hold_spot(bomb_site, [])
+				r.append(_v3(hold[0]))
+			r.append(_free(bomb_at + Vector3(randf_range(-0.6, 0.6), 0.0, randf_range(-0.6, 0.6))))
+			plan = _new_plan("retake", r, bomb_at, randf_range(0.3, 3.0))
+			plan["pause_p"] = 0.2
+		plan["site"] = bomb_site
+		plans[b] = plan
+
+
+# Who is near which site, to react to (like hearing steps and shots there).
+func _sense() -> void:
+	for s in SdMap.SITES.size():
+		var at: Vector3 = SdMap.SITES[s]
+		for b in bots:
+			if b.team == attackers and b.alive and b.global_position.distance_to(at) < 13.0:
+				_contact[s] = clock
+		if attackers == 0 and float(player.health) > 0.0 and player.global_position.distance_to(at) < 13.0:
+			_contact[s] = clock
+
+
+func _drive(dt: float) -> void:
+	_sense_t -= dt
+	if _sense_t <= 0.0:
+		_sense_t = 0.5
+		_sense()
+	var nav: Dictionary = SdMap.NAV
+	for b in bots:
+		if not b.alive or not plans.has(b):
+			continue
+		var plan: Dictionary = plans[b]
+		var route: Array = plan["route"]
+		# Reacting to contact at a site, each with its own delay and its own mind.
+		if b.team != attackers and phase == "live":
+			for s in 2:
+				if s != int(plan["site"]) and clock - float(_contact[s]) < 1.0 and float(plan["react_at"]) == INF:
+					var keen := 0.9 if plan["role"] == "rotator" else (0.5 if plan["role"] == "forward" else 0.3)
+					if randf() < keen:
+						plan["react_at"] = clock + randf_range(0.4, 2.5)
+						plan["react_site"] = s
+					else:
+						plan["react_at"] = -1.0      # decided to stay
+			if float(plan["react_at"]) > 0.0 and float(plan["react_at"]) != INF and clock >= float(plan["react_at"]):
+				var s: int = plan["react_site"]
+				var hold := _hold_spot(s, [])
+				var p2 := _new_plan("anchor", _route([hold[0]]), _v3(hold[1]), 0.0)
+				p2["site"] = s
+				p2["react_at"] = -1.0
+				p2["until"] = clock + randf_range(10.0, 20.0)
+				plans[b] = p2
+				continue
+		if float(plan["wait"]) > 0.0:
+			plan["wait"] = float(plan["wait"]) - dt
+			b.goal = b.global_position
+			continue
+		var i: int = plan["i"]
+		if i < route.size():
+			var to: Vector3 = route[i]
+			b.goal = to
+			var flat := Vector2(to.x - b.global_position.x, to.z - b.global_position.z)
+			if flat.length() > 0.1:
+				b.watch = Vector3(flat.x, 0.0, flat.y).normalized()
+			if flat.length() < 1.6:
+				plan["i"] = i + 1
+				plan["stuck"] = 0.0
+				# Stop and check the corner before going on.
+				if i + 1 < route.size() and randf() < float(plan["pause_p"]):
+					plan["wait"] = randf_range(0.5, 2.0)
+			else:
+				var last: Vector3 = plan["last"]
+				if b.has_los or last == Vector3.INF or b.global_position.distance_to(last) > 0.05:
+					plan["stuck"] = 0.0
+				else:
+					plan["stuck"] = float(plan["stuck"]) + dt
+					if float(plan["stuck"]) > 2.5:
+						plan["i"] = i + 1      # cannot get there: skip it
+						plan["stuck"] = 0.0
+			plan["last"] = b.global_position
+			continue
+		# Holding the end of the route.
+		var look: Vector3 = plan["look"]
+		var hold_at: Vector3 = route.back() if not route.is_empty() else b.global_position
+		b.goal = hold_at
+		var dir := Vector3(look.x - b.global_position.x, 0.0, look.z - b.global_position.z)
+		if dir.length() > 0.1:
+			b.watch = dir.normalized()
+		if clock < float(plan["until"]):
+			continue
+		match plan["role"]:
+			"anchor", "rotator":
+				# Shift to another spot on the same site, so they are never quite where you expect.
+				var hold := _hold_spot(int(plan["site"]), [])
+				var p2 := _new_plan(plan["role"], _route([hold[0]]), _v3(hold[1]), 0.0)
+				p2["site"] = plan["site"]
+				p2["until"] = clock + randf_range(8.0, 18.0)
+				p2["react_at"] = plan["react_at"]
+				p2["hunt_after"] = plan["hunt_after"]
+				plans[b] = p2
+			"forward":
+				# Fall back to the nearer site.
+				var s := 0 if b.global_position.x < 0.0 else 1
+				var hold := _hold_spot(s, [])
+				var p2 := _new_plan("anchor", _route([hold[0]]), _v3(hold[1]), 0.0)
+				p2["site"] = s
+				p2["until"] = clock + randf_range(8.0, 18.0)
+				p2["hunt_after"] = plan["hunt_after"]
+				plans[b] = p2
+			"lurk":
+				# Done waiting: join the attack on the site.
+				var p2 := _new_plan("support", [_site_point(target_site, 5.0)], Vector3(0, 0, -30), 0.0)
+				p2["site"] = target_site
+				p2["hunt_after"] = plan["hunt_after"]
+				plans[b] = p2
