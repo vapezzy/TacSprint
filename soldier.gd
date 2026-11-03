@@ -88,13 +88,26 @@ func setup(team_color: Color, enemy_look: bool) -> void:
 	head.position = Vector3(0, 0.25, 0.0)
 	upper.add_child(head)
 	_part(head, _capsule(0.058, 0.16), sleeve, Vector3(0, -0.09, 0.01))
-	var face := _part(head, _sphere(0.1, 0.24), gear if enemy_look else skin, Vector3(0, 0.0, -0.005))
+	# A balaclava over the face, a strip of skin round the eyes, tinted glasses over them.
+	var mask := StandardMaterial3D.new()
+	mask.albedo_color = Color(0.03, 0.03, 0.03) if enemy_look else Color(0.11, 0.12, 0.08)
+	mask.roughness = 0.95
+	mask.normal_enabled = true
+	mask.normal_texture = Assets.tex("stretch_poplin_nor_gl.jpg")
+	mask.uv1_triplanar = true
+	mask.uv1_scale = Vector3.ONE * 10.0
+	var face := _part(head, _sphere(0.1, 0.24), mask, Vector3(0, 0.0, -0.005))
 	face.scale = Vector3(0.95, 1.0, 1.05)
-	if not enemy_look:
-		# Shades over the eyes.
-		var shades := BoxMesh.new()
-		shades.size = Vector3(0.17, 0.035, 0.04)
-		_part(head, shades, metal, Vector3(0, 0.025, -0.092))
+	var eyes := BoxMesh.new()
+	eyes.size = Vector3(0.15, 0.045, 0.03)
+	_part(head, eyes, skin, Vector3(0, 0.025, -0.088))
+	var lens := StandardMaterial3D.new()
+	lens.albedo_color = Color(0.05, 0.06, 0.07)
+	lens.metallic = 0.8
+	lens.roughness = 0.08
+	var shades := BoxMesh.new()
+	shades.size = Vector3(0.175, 0.04, 0.025)
+	_part(head, shades, lens, Vector3(0, 0.027, -0.1))
 	var helmet := SphereMesh.new()
 	helmet.radius = 0.132
 	helmet.height = 0.132

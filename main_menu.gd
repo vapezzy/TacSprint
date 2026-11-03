@@ -93,13 +93,14 @@ func _init() -> void:
 
 func _ready() -> void:
 	var shade := ColorRect.new()
-	shade.color = Color(0.025, 0.03, 0.04, 0.5)
+	shade.color = Color(0.025, 0.03, 0.04, 0.12)
 	shade.set_anchors_preset(Control.PRESET_FULL_RECT)
 	add_child(shade)
 	# Darker towards the left, where the text sits.
 	var fade := TextureRect.new()
 	var g := Gradient.new()
-	g.colors = PackedColorArray([Color(0, 0, 0, 0.75), Color(0, 0, 0, 0.0)])
+	g.colors = PackedColorArray([Color(0, 0, 0, 0.82), Color(0, 0, 0, 0.45), Color(0, 0, 0, 0.0)])
+	g.offsets = PackedFloat32Array([0.0, 0.3, 0.55])
 	var gt := GradientTexture2D.new()
 	gt.gradient = g
 	fade.texture = gt
@@ -257,9 +258,15 @@ func _page_play() -> Control:
 	quit.pressed.connect(func() -> void: get_tree().quit())
 	left.add_child(quit)
 
-	var info := _panel(Vector2(560, 0))
+	var gap := Control.new()
+	gap.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	gap.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	row.add_child(gap)
+	var info := _panel(Vector2(330, 0))
 	info.add_child(_label("AKTIVE KLASSE", 20, ACCENT))
-	info.add_child(_build_showcase())
+	var showcase := _build_showcase()
+	showcase.visible = false          # the operator in the middle carries the look now
+	info.add_child(showcase)
 	summary = _label("", 18, Color.WHITE)
 	info.add_child(summary)
 	play_info = info.get_meta("outer")
@@ -295,7 +302,7 @@ func _mode_card(icon: String, title: String, sub: String, height: float, font: i
 func _build_showcase() -> Control:
 	var frame := SubViewportContainer.new()
 	frame.stretch = true
-	frame.custom_minimum_size = Vector2(540, 250)
+	frame.custom_minimum_size = Vector2(380, 170)
 	var vp := SubViewport.new()
 	vp.own_world_3d = true
 	vp.transparent_bg = true
@@ -1209,7 +1216,7 @@ func _process(dt: float) -> void:
 	if editor != null and editor.visible and preview_root != null:
 		preview_root.rotation.y += dt * 0.35
 		preview_root.rotation.x = deg_to_rad(8.0)
-	if is_open and frozen and backdrop != null:
+	if is_open and frozen and backdrop != null and not backdrop.has_meta("fixed"):
 		orbit += dt * 0.045
 		backdrop.look_at_from_position(orbit_centre + Vector3(sin(orbit) * 30.0, 15.0, cos(orbit) * 30.0), orbit_centre + Vector3.UP * 1.5)
 	if search_t < 0.0:

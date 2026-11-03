@@ -16,6 +16,7 @@ const SdMode := preload("res://sd_mode.gd")
 const SdMap := preload("res://sd_map.gd")
 const Icons := preload("res://icons.gd")
 const Loading := preload("res://loading.gd")
+const MenuStage := preload("res://menu_stage.gd")
 const TouchControls := preload("res://touch_controls.gd")
 const EQUIP_ICONS := {"wurfmesser": "knife", "granate": "grenade", "blend": "flash", "betaeubung": "stun", "stim": "stim"}
 const RATTE_KILLS := 3
@@ -281,11 +282,11 @@ func _ready() -> void:
 	add_child(main_menu)
 	main_menu.play.connect(_on_play)
 	# The camera that circles the map behind the main menu.
-	var backdrop := Camera3D.new()
-	backdrop.cull_mask = 1
-	backdrop.fov = 55.0
-	backdrop.process_mode = Node.PROCESS_MODE_ALWAYS
-	add_child(backdrop)
+	# The menu scene: your operator in a hangar bay (menu_stage.gd), filmed by its own camera.
+	var stage := MenuStage.new()
+	add_child(stage)
+	var backdrop: Camera3D = stage.cam
+	backdrop.set_meta("fixed", true)
 	main_menu.backdrop = backdrop
 	main_menu.game_cam = player.cam
 	main_menu.orbit_centre = Vector3(0, 0, 30) if (selftest or test_range) else Vector3.ZERO
@@ -1983,6 +1984,15 @@ func effect_blast(kind: String, at: Vector3) -> void:
 
 
 func _run_flash_test() -> void:
+	if OS.get_cmdline_user_args().has("--menushot"):
+		hud.visible = false
+		main_menu.open()
+		main_menu.show_tab(0)
+		for i in 6:
+			await get_tree().create_timer(2.5).timeout
+			await _save_view("menu_stage_%d" % i)
+		get_tree().quit(0)
+		return
 	if OS.get_cmdline_user_args().has("--stimshot"):
 		await _stim_shots()
 		get_tree().quit(0)
