@@ -22,8 +22,8 @@ env:
 
 jobs:
   ipa:
-    # macOS 15 machines are easier to get than macOS 26 ones; they carry Xcode 26 too.
-    runs-on: macos-15
+    # The Intel Macs are easiest to get; they carry Xcode 26 too.
+    runs-on: macos-15-intel
     steps:
       - uses: actions/checkout@v5
 
