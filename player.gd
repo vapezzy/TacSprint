@@ -428,6 +428,9 @@ signal silent_shot
 signal sound_played(file: String, volume_db: float)
 
 var health := 130.0
+var stim_flash := 0.0            # 1 right after a stim, fades out (the HUD shows it)
+var _breathed := false           # the deep breath has played since the last hit
+var _last_step := 0
 var last_hurt := -10.0
 var hurt_from := Vector3.ZERO
 
@@ -437,6 +440,7 @@ func hurt(damage: float, from: Vector3) -> void:
 		return
 	health -= damage
 	last_hurt = clock
+	_breathed = false
 	hurt_from = from
 	dip_vel -= 0.5
 	punch_roll += deg_to_rad(randf_range(-2.5, 2.5))
@@ -794,7 +798,12 @@ func _physics_process(dt: float) -> void:
 	slide_cd = maxf(slide_cd - dt, 0.0)
 	land_slow = maxf(land_slow - dt, 0.0)
 	if health > 0.0 and clock - last_hurt > 4.0:
+		if not _breathed and health < max_health() * 0.8:
+			# Getting your breath back: one deep breath in and out as health returns.
+			_breathed = true
+			_play("breath", "breath.wav", -7.0)
 		health = minf(health + 40.0 * dt, max_health())
+	stim_flash = maxf(stim_flash - dt * 1.4, 0.0)
 	jump_fatigue = maxf(jump_fatigue - dt / 1.2, 0.0)
 
 	# Landing: the harder the fall, the deeper the dip and the longer the recovery.
@@ -1128,6 +1137,8 @@ func _update_weapon(dt: float) -> void:
 		tactical_left -= 1
 		tactical_t = 0.001
 		reloading = 0.0
+		if tactical == "stim":
+			_play("stim", "stim.wav", -6.0, 0.08)
 	if lethal_t > 0.0:
 		if lethal_cancel:
 			lethal_t -= dt / 0.22 * 0.3
@@ -1152,7 +1163,19 @@ func _update_weapon(dt: float) -> void:
 				throws += 1
 			if lethal_t >= 1.0:
 				lethal_t = 0.0
-	if tactical_t > 0.0:
+	if tactical_t > 0.0 and tactical == "stim":
+		# Stim: the left hand comes up with the injector and punches it into the leg.
+		var before := tactical_t
+		tactical_t += dt / 1.0
+		if before < 0.42 and tactical_t >= 0.42:
+			health = max_health()
+			last_hurt = -10.0
+			_breathed = false
+			stim_flash = 1.0
+			dip_vel -= 0.25
+		if tactical_t >= 1.0:
+			tactical_t = 0.0
+	elif tactical_t > 0.0:
 		var before := tactical_t
 		tactical_t += dt / 0.62
 		if before < 0.5 and tactical_t >= 0.5:
@@ -1560,6 +1583,15 @@ func _update_view(dt: float) -> void:
 	var grounded := is_on_floor() and not sliding and not mantling
 	if grounded:
 		bob_t += hv * dt * p.stride
+		# A footstep each time a foot comes down: louder when running, soft when crouched.
+		var footfall := int(floor(bob_t / PI))
+		if footfall != _last_step:
+			_last_step = footfall
+			if hv > 0.8 and not ai_enabled:
+				var level := lerpf(-22.0, -11.0, clampf(hv / 7.0, 0.0, 1.0))
+				if stance != Stance.STAND:
+					level -= 7.0
+				_play("step", "step.wav", level)
 	var amp := p.bob * lerpf(1.0, 0.15, ads_amt) * clampf(hv / 1.2, 0.0, 1.0)
 	# Footfalls: a quick drop when the foot lands and a slower rise, never two steps alike.
 	var step := fposmod(bob_t / PI, 1.0)

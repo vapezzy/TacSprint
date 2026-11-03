@@ -38,6 +38,10 @@ const POSES := {
 	"Prone Enter": [Vector3(0, 0.4, 0.4), Vector3(0.13, ANKLE, 0.22), Vector3(-0.14, 0.1, 0.95), 0.0, 0.0],
 	"Prone Idle": [Vector3(0, 0.16, 0.85), Vector3(0.15, 0.1, 1.71), Vector3(-0.15, 0.1, 1.71), 0.1, 0.0],
 	"Prone Exit": [Vector3(0, 0.5, 0.3), Vector3(0.13, ANKLE, -0.1), Vector3(-0.14, ANKLE, 0.62), 0.0, 0.0],
+	# Standing tall, for the bot figures seen from outside (soldier.gd).
+	"Bot Idle": [Vector3(0, 0.975, 0.0), Vector3(0.12, ANKLE, -0.03), Vector3(-0.12, ANKLE, 0.05), 0.0, 0.0],
+	"Bot Walk": [Vector3(0, 0.965, 0.0), Vector3(0.11, ANKLE, 0.0), Vector3(-0.11, ANKLE, 0.0), 0.3, 0.12],
+	"Bot Run": [Vector3(0, 0.95, -0.03), Vector3(0.11, ANKLE, 0.0), Vector3(-0.11, ANKLE, 0.0), 0.48, 0.2],
 	"Mantle": [Vector3(0, 0.9, 0.1), Vector3(0.12, 0.5, -0.2), Vector3(-0.12, 0.15, 0.16), 0.0, 0.0],
 }
 

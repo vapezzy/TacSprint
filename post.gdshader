@@ -10,6 +10,8 @@ uniform float fringe = 0.0018;
 uniform float vignette = 0.36;
 uniform float grain = 0.022;
 uniform float halation = 0.4;
+uniform float hurt = 0.0;          // 0 healthy .. 1 nearly dead: the edges darken and redden, colour drains
+uniform float stim = 0.0;          // a stim just went in: a cold flash from the edges, colours pop
 uniform vec2 blur = vec2(0.0);    // motion blur: screen movement per frame, in UV
 
 void fragment() {
@@ -49,6 +51,21 @@ void fragment() {
 	c += max(wide - vec3(0.8), vec3(0.0)) * vec3(1.0, 0.55, 0.3) * halation;
 
 	c *= 1.0 - vignette * smoothstep(0.12, 0.55, r2);
+
+	// Hurt: the world loses colour, the edges close in dark red and pulse with the heartbeat.
+	if (hurt > 0.001) {
+		float grey = dot(c, vec3(0.2126, 0.7152, 0.0722));
+		c = mix(c, vec3(grey), hurt * 0.4);
+		float beat = 0.8 + 0.2 * sin(TIME * 7.5) * sin(TIME * 7.5);
+		float edge = smoothstep(0.17, 0.5, r2) * hurt * beat;
+		c = mix(c, c * vec3(0.5, 0.06, 0.05) + vec3(0.1, 0.0, 0.0), edge * 0.85);
+	}
+	// Stim: a quick cold-white wash from the edges and a little extra saturation.
+	if (stim > 0.001) {
+		float grey2 = dot(c, vec3(0.2126, 0.7152, 0.0722));
+		c = mix(vec3(grey2), c, 1.0 + stim * 0.35);
+		c += vec3(0.55, 0.85, 0.75) * smoothstep(0.1, 0.5, r2) * stim * 0.45;
+	}
 
 	float noise = fract(sin(dot(uv * vec2(1731.0, 977.0) + fract(TIME) * 61.0, vec2(12.9898, 78.233))) * 43758.5453);
 	c += (noise - 0.5) * grain;

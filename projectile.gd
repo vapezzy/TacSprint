@@ -8,12 +8,13 @@ extends Node3D
 # is worked out on every game for the players and bots that game controls.
 
 const LETHAL := ["wurfmesser", "granate"]
-const TACTICAL := ["blend", "betaeubung"]
+const TACTICAL := ["blend", "betaeubung", "stim"]
 const ALL := {
 	"wurfmesser": {"name": "Wurfmesser", "text": "Fliegt gerade und schnell. Ein Treffer tötet.", "count": 1},
 	"granate": {"name": "Splittergranate", "text": "Explodiert nach 2,5 s, prallt von Wänden ab.", "count": 1},
 	"blend": {"name": "Blendgranate", "text": "Blendet alle, die hinsehen, für einige Sekunden.", "count": 2},
 	"betaeubung": {"name": "Betäubungsgranate", "text": "Verlangsamt Laufen und Zielen im Umkreis.", "count": 2},
+	"stim": {"name": "Stim", "text": "Spritze in den Oberschenkel: sofort volle Gesundheit.", "count": 1},
 }
 const KNIFE_DAMAGE := 150.0
 const BLAST_RADIUS := 6.0

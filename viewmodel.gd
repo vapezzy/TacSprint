@@ -356,6 +356,34 @@ func _left_throw_pose(t: float) -> Transform3D:
 	return _arm_to(LEFT_WRIST, LEFT_ELBOW, key)
 
 
+# Left hand with the stim: it comes up from below into the picture with the
+# injector, needle down (0-0.3), punches it down into the thigh, out of the
+# bottom of the picture (0.3-0.42), holds while it empties, and comes back to
+# the weapon (0.6-1).
+func _left_stim_pose(t: float) -> Transform3D:
+	var rest := _rest_key(LEFT_WRIST, LEFT_ELBOW)
+	var low_e: Vector3 = rest[0] + Vector3(0.05, -0.35, 0.05)
+	var low := [low_e, low_e + Vector3(0.03, 0.17, -0.14), 0.0]
+	var show_e: Vector3 = rest[0] + Vector3(0.1, -0.1, -0.06)
+	var show := [show_e, show_e + Vector3(0.05, 0.2, -0.12), 0.25]
+	var jab_e: Vector3 = rest[0] + Vector3(0.09, -0.3, 0.06)
+	var jab := [jab_e, jab_e + Vector3(0.04, 0.03, -0.2), 0.25]
+	var key: Array
+	if t < 0.08:
+		key = _mix(rest, low, t / 0.08)
+	elif t < 0.3:
+		key = _mix(low, show, (t - 0.08) / 0.22)
+	elif t < 0.42:
+		key = _mix(show, jab, pow((t - 0.3) / 0.12, 2.0))
+	elif t < 0.62:
+		key = jab
+	elif t < 0.8:
+		key = _mix(jab, low, (t - 0.62) / 0.18)
+	else:
+		key = _mix(low, rest, (t - 0.8) / 0.2)
+	return _arm_to(LEFT_WRIST, LEFT_ELBOW, key)
+
+
 func _held_mesh(parent: Node3D, kind: String, at: Vector3) -> Node3D:
 	var holder := Node3D.new()
 	holder.position = at
@@ -374,6 +402,22 @@ func _held_mesh(parent: Node3D, kind: String, at: Vector3) -> Node3D:
 			parts = [[Vector3(0.012, 0.09, 0.02), dark, Vector3.ZERO], [Vector3(0.004, 0.12, 0.024), steel, Vector3(0, 0.105, -0.004)]]
 		"granate":
 			parts = [["ball", Color(0.17, 0.2, 0.11), Vector3(0, 0.0, 0)], [Vector3(0.018, 0.028, 0.018), steel, Vector3(0, 0.05, 0)]]
+		"stim":
+			# An auto-injector held in the fist, needle end down: body, label band,
+			# orange safety end and the needle.
+			var body := StandardMaterial3D.new()
+			body.albedo_color = Color(0.12, 0.3, 0.2)
+			body.roughness = 0.35
+			var label := StandardMaterial3D.new()
+			label.albedo_color = Color(0.9, 0.9, 0.85)
+			var tip := StandardMaterial3D.new()
+			tip.albedo_color = Color(1.0, 0.45, 0.08)
+			tip.emission_enabled = true
+			tip.emission = Color(1.0, 0.4, 0.05)
+			tip.emission_energy_multiplier = 0.4
+			parts = [[Vector3(0.026, 0.13, 0.026), body, Vector3(0, 0.0, 0)], [Vector3(0.028, 0.035, 0.028), label, Vector3(0, 0.02, 0)],
+					[Vector3(0.03, 0.025, 0.03), tip, Vector3(0, -0.075, 0)], [Vector3(0.004, 0.035, 0.004), steel, Vector3(0, -0.105, 0)],
+					[Vector3(0.02, 0.02, 0.02), dark, Vector3(0, 0.075, 0)]]
 		_:
 			parts = [["can", Color(0.32, 0.34, 0.33) if kind == "blend" else Color(0.18, 0.22, 0.3), Vector3.ZERO],
 					[Vector3(0.014, 0.026, 0.014), steel, Vector3(0, 0.066, 0)]]
@@ -412,7 +456,7 @@ func _held_mesh(parent: Node3D, kind: String, at: Vector3) -> Node3D:
 func _build_held_items() -> void:
 	for kind: String in ["wurfmesser", "granate"]:
 		right_items[kind] = _held_mesh(right_arm, kind, Vector3(0.0, -0.098, 0.072))
-	for kind: String in ["blend", "betaeubung"]:
+	for kind: String in ["blend", "betaeubung", "stim"]:
 		left_items[kind] = _held_mesh(left_arm, kind, FIST + Vector3(0.0, 0.0, 0.0))
 
 
@@ -536,9 +580,10 @@ func _left_pose_for(reload: float, inspect: float) -> String:
 # for the held magazine. reload: 0 = not reloading, otherwise progress 0-1.
 func pose_left(dt: float, free: float, phase: float, inspect: float, wobble: Vector2, reload: float) -> void:
 	for id: String in left_items:
-		left_items[id].visible = id == left_item and left_throw > 0.0 and left_throw < 0.5
+		var until := 0.78 if id == "stim" else 0.5
+		left_items[id].visible = id == left_item and left_throw > 0.0 and left_throw < until
 	if left_throw > 0.0:
-		left_arm.transform = _left_throw_pose(left_throw)
+		left_arm.transform = _left_stim_pose(left_throw) if left_item == "stim" else _left_throw_pose(left_throw)
 		left_arm.visible = true
 		_arm = left_arm.transform
 		mag.transform = Transform3D.IDENTITY

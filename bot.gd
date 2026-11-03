@@ -16,6 +16,7 @@ signal sounded(file: String, at: Vector3, volume_db: float)
 
 const Assets := preload("res://assets.gd")
 const Arena := preload("res://arena.gd")
+const Soldier := preload("res://soldier.gd")
 
 const CELL := 0.5
 const SPEED := 4.3
@@ -79,8 +80,7 @@ var clock := 0.0
 var _pick_t := 0.0
 var _path_to := Vector3.INF
 
-var body: Node3D
-var legs: Array[MeshInstance3D] = []
+var body: Node3D               # the soldier figure (soldier.gd)
 var flash: OmniLight3D
 var tracer: MeshInstance3D
 var muzzle: Node3D
@@ -118,62 +118,11 @@ func _capsule(radius: float, height: float) -> CapsuleMesh:
 
 
 func _build_body() -> void:
-	body = Node3D.new()
+	var figure := Soldier.new()
+	body = figure
 	add_child(body)
-	# A different uniform from the player's: plain dark grey with a red armband.
-	var cloth := StandardMaterial3D.new()
-	cloth.albedo_color = Color(0.16, 0.17, 0.18)
-	cloth.roughness = 0.95
-	cloth.normal_enabled = true
-	cloth.normal_texture = Assets.tex("denim_fabric_nor_gl.jpg")
-	cloth.uv1_triplanar = true
-	cloth.uv1_scale = Vector3.ONE * 3.0
-	var gear := StandardMaterial3D.new()
-	gear.albedo_color = Color(0.03, 0.03, 0.035)
-	gear.roughness = 0.8
-	var skin := StandardMaterial3D.new()
-	skin.albedo_color = Color(0.5, 0.36, 0.28)
-	skin.roughness = 0.7
-	var band := StandardMaterial3D.new()
-	band.albedo_color = band_color
-	band.roughness = 0.8
-
-	for side: float in [-1.0, 1.0]:
-		var leg := _part(body, _capsule(0.085, 0.86), cloth, Vector3(side * 0.11, 0.45, 0))
-		legs.append(leg)
-		var boot := BoxMesh.new()
-		boot.size = Vector3(0.11, 0.1, 0.27)
-		_part(leg, boot, gear, Vector3(0, -0.4, -0.05))
-	_part(body, _capsule(0.19, 0.7), cloth, Vector3(0, 1.17, 0))
-	var vest := BoxMesh.new()
-	vest.size = Vector3(0.42, 0.42, 0.3)
-	_part(body, vest, gear, Vector3(0, 1.2, 0))
-	var head := SphereMesh.new()
-	head.radius = 0.11
-	head.height = 0.24
-	_part(body, head, skin, Vector3(0, 1.64, 0))
-	var helmet := SphereMesh.new()
-	helmet.radius = 0.135
-	helmet.height = 0.2
-	_part(body, helmet, gear, Vector3(0, 1.7, 0.01))
-	# Arms raised to the weapon.
-	_part(body, _capsule(0.06, 0.6), cloth, Vector3(0.2, 1.3, -0.2), Vector3(deg_to_rad(-70.0), 0, deg_to_rad(-12.0)))
-	_part(body, _capsule(0.06, 0.66), cloth, Vector3(-0.17, 1.3, -0.27), Vector3(deg_to_rad(-72.0), 0, deg_to_rad(22.0)))
-	var ring := CylinderMesh.new()
-	ring.top_radius = 0.068
-	ring.bottom_radius = 0.068
-	ring.height = 0.07
-	_part(body, ring, band, Vector3(0.21, 1.36, -0.07), Vector3(deg_to_rad(-70.0), 0, deg_to_rad(-12.0)))
-	var gun := BoxMesh.new()
-	gun.size = Vector3(0.05, 0.1, 0.62)
-	_part(body, gun, gear, Vector3(0.06, 1.38, -0.5))
-	var mag := BoxMesh.new()
-	mag.size = Vector3(0.035, 0.17, 0.06)
-	_part(body, mag, gear, Vector3(0.06, 1.27, -0.45), Vector3(deg_to_rad(-12.0), 0, 0))
-
-	muzzle = Node3D.new()
-	muzzle.position = Vector3(0.06, 1.38, -0.84)
-	body.add_child(muzzle)
+	figure.setup(band_color, team != 0)
+	muzzle = figure.muzzle
 	flash = OmniLight3D.new()
 	flash.light_color = Color(1.0, 0.8, 0.45)
 	flash.omni_range = 6.0
@@ -436,10 +385,7 @@ func _remote_step(dt: float) -> void:
 		global_position = global_position.lerp(net_pos, 1.0 - exp(-18.0 * dt))
 	rotation.y = lerp_angle(rotation.y, net_yaw, 1.0 - exp(-18.0 * dt))
 	var moved := (global_position - before).length()
-	step += moved * 3.2
-	var swing := sin(step) * 0.5 * clampf(moved / maxf(dt, 0.0001) / SPEED, 0.0, 1.0)
-	legs[0].rotation.x = swing
-	legs[1].rotation.x = -swing
+	(body as Soldier).animate(dt, moved / maxf(dt, 0.0001), true)
 
 
 func _physics_process(dt: float) -> void:
@@ -544,11 +490,18 @@ func _physics_process(dt: float) -> void:
 
 	if face.length() > 0.05:
 		rotation.y = lerp_angle(rotation.y, atan2(-face.x, -face.z), 1.0 - exp(-10.0 * dt))
-	# Legs swing with the ground covered.
-	step += moved * 3.2
-	var swing := sin(step) * 0.5 * clampf(moved / maxf(dt, 0.0001) / SPEED, 0.0, 1.0)
-	legs[0].rotation.x = swing
-	legs[1].rotation.x = -swing
+	# The figure walks with the ground covered and aims where it shoots.
+	var figure := body as Soldier
+	step += moved
+	if step > 1.35 and is_on_floor():
+		step = 0.0
+		_sound("step.wav", -6.0 if moved / maxf(dt, 0.0001) > 3.0 else -12.0)
+	if has_los and target != null:
+		var to := target.global_position + Vector3.UP * 1.2 - (global_position + Vector3.UP * 1.45)
+		figure.aim_pitch = clampf(atan2(to.y, Vector2(to.x, to.z).length()), -0.8, 0.8)
+	else:
+		figure.aim_pitch = 0.0
+	figure.animate(dt, moved / maxf(dt, 0.0001), has_los or clock - last_seen_t < 3.0 or (game == null and seen_for > 0.0))
 
 
 func _fire_control(dt: float, dist: float) -> void:

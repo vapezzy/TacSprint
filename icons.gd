@@ -23,6 +23,7 @@ const SVG := {
 	"users": '<circle cx="22" cy="20" r="9" fill="#fff"/><path d="M6 50 Q6 32 22 32 Q38 32 38 50 Z" fill="#fff"/><circle cx="44" cy="22" r="8" fill="#fff" fill-opacity="0.75"/><path d="M36 33 Q58 30 58 50 H40 Q40 40 36 33 Z" fill="#fff" fill-opacity="0.75"/>',
 	"shield": '<path d="M32 4 L54 12 V30 Q54 50 32 60 Q10 50 10 30 V12 Z" fill="#fff"/>',
 	"flash": '<rect x="20" y="14" width="24" height="40" rx="4" fill="#fff"/><rect x="26" y="6" width="12" height="9" fill="#fff"/><path d="M8 20 L2 14 M56 20 L62 14 M8 40 H0 M56 40 H64" stroke="#fff" stroke-width="3"/>',
+	"stim": '<rect x="24" y="16" width="16" height="30" rx="3" fill="#fff"/><rect x="20" y="10" width="24" height="5" fill="#fff"/><rect x="30" y="2" width="4" height="9" fill="#fff"/><path d="M32 46 V62" stroke="#fff" stroke-width="2.5"/><path d="M27 24 H37 M27 31 H37 M27 38 H37" stroke="#000" stroke-opacity="0.45" stroke-width="2"/>',
 	"stun": '<rect x="20" y="14" width="24" height="40" rx="4" fill="#fff"/><rect x="26" y="6" width="12" height="9" fill="#fff"/><path d="M26 26 L38 34 L26 42" fill="none" stroke="#000" stroke-opacity="0.5" stroke-width="4"/>',
 	"pin": '<path d="M32 60 Q12 36 12 24 A20 20 0 0 1 52 24 Q52 36 32 60 Z" fill="#fff"/><circle cx="32" cy="24" r="7" fill="#000" fill-opacity="0.5"/>',
 	"wrench": '<path d="M44 6 A14 14 0 0 0 36 30 L8 58 L14 62 L42 34 A14 14 0 0 0 60 20 L50 24 L44 18 L48 8 Z" fill="#fff"/>',

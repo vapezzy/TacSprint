@@ -17,7 +17,7 @@ const SdMap := preload("res://sd_map.gd")
 const Icons := preload("res://icons.gd")
 const Loading := preload("res://loading.gd")
 const TouchControls := preload("res://touch_controls.gd")
-const EQUIP_ICONS := {"wurfmesser": "knife", "granate": "grenade", "blend": "flash", "betaeubung": "stun"}
+const EQUIP_ICONS := {"wurfmesser": "knife", "granate": "grenade", "blend": "flash", "betaeubung": "stun", "stim": "stim"}
 const RATTE_KILLS := 3
 const RATTE_SECONDS := 20.0
 const LAN_PORT := 24565
@@ -1983,6 +1983,14 @@ func effect_blast(kind: String, at: Vector3) -> void:
 
 
 func _run_flash_test() -> void:
+	if OS.get_cmdline_user_args().has("--stimshot"):
+		await _stim_shots()
+		get_tree().quit(0)
+		return
+	if OS.get_cmdline_user_args().has("--soldiershot"):
+		await _soldier_shots()
+		get_tree().quit(0)
+		return
 	if OS.get_cmdline_user_args().has("--lobbyshot"):
 		main_menu.open(false)
 		main_menu.show_tab(0)
@@ -2310,3 +2318,54 @@ func _motion_blur() -> void:
 		blur = Vector2(-player.turn.x / hfov, player.turn.y / vfov) * shutter
 		blur = blur.limit_length(0.035)
 	post_mat.set_shader_parameter("blur", blur)
+	var full: float = player.max_health()
+	var lost := clampf(1.0 - player.health / full, 0.0, 1.0)
+	post_mat.set_shader_parameter("hurt", smoothstep(0.3, 0.9, lost) if player.health > 0.0 and not main_menu.is_open else 0.0)
+	post_mat.set_shader_parameter("stim", player.stim_flash)
+
+
+
+# --soldiershot: the bot figure close up, from the front, the side and walking.
+func _soldier_shots() -> void:
+	const Soldier := preload("res://soldier.gd")
+	player.vm.visible = false
+	hud.visible = false
+	var cam: Camera3D = player.cam
+	var figs: Array = []
+	for i in 2:
+		var f := Soldier.new()
+		add_child(f)
+		f.setup(Color(0.95, 0.28, 0.22) if i == 0 else Color(0.25, 0.55, 1.0), i == 0)
+		figs.append(f)
+	var base := cam.global_position + Vector3(0, -1.6, 0) - cam.global_basis.z * 3.2
+	base.y = 0.05
+	var views := [["soldier_front", 0.0, 0.0, true], ["soldier_side", PI / 2.0, 0.0, true], ["soldier_walk", PI * 0.75, 3.0, false], ["soldier_back", PI, 4.5, false]]
+	for v: Array in views:
+		for i in 2:
+			var f: Node3D = figs[i]
+			f.global_position = base + cam.global_basis.x * (i * 1.3 - 0.65)
+			f.look_at(Vector3(cam.global_position.x, f.global_position.y, cam.global_position.z) , Vector3.UP)
+			f.rotate_y(float(v[1]))
+		for k in 40:
+			for f: Node3D in figs:
+				f.call("animate", 1.0 / 60.0, float(v[2]), bool(v[3]))
+			await get_tree().process_frame
+		await _save_view(v[0])
+
+
+
+# --stimshot: hurt, then the stim from the hand coming up to the jab, frame by frame.
+func _stim_shots() -> void:
+	player.set_equipment(player.lethal, "stim")
+	player.hurt(95.0, player.global_position + Vector3(0, 1, -5))
+	await _wait(0.4)
+	await _save_view("stim_hurt")
+	player.ai = {"tactical": true}
+	await get_tree().physics_frame
+	await get_tree().physics_frame
+	player.ai = {}
+	for k in [0.12, 0.26, 0.38, 0.5, 0.75]:
+		while player.tactical_t < k and player.tactical_t > 0.0:
+			await get_tree().process_frame
+		await _save_view("stim_%02d" % int(k * 100))
+	print("STIMSHOT health=", player.health, " max=", player.max_health())
