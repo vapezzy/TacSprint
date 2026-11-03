@@ -12,12 +12,18 @@ on:
 permissions:
   contents: write
 
+# A newer push replaces a build still waiting for a Mac.
+concurrency:
+  group: ios-${{ github.ref }}
+  cancel-in-progress: true
+
 env:
   GODOT_VERSION: "4.7.2"
 
 jobs:
   ipa:
-    runs-on: macos-26
+    # macOS 15 machines are easier to get than macOS 26 ones; they carry Xcode 26 too.
+    runs-on: macos-15
     steps:
       - uses: actions/checkout@v5
 
@@ -49,7 +55,8 @@ jobs:
           set -o pipefail
           # Godot 4.7 is built against the iOS 26 SDK, so use the newest Xcode there is.
           xc=$(ls -d /Applications/Xcode_26*.app 2>/dev/null | sort -V | tail -1)
-          if [ -n "$xc" ]; then sudo xcode-select -s "$xc"; fi
+          if [ -z "$xc" ]; then echo "No Xcode 26 on this runner"; ls /Applications | grep Xcode; exit 1; fi
+          sudo xcode-select -s "$xc"
           xcodebuild -version
           xcodebuild -project build/ios/TacSprint.xcodeproj -scheme TacSprint \
             -configuration Release -sdk iphoneos -destination generic/platform=iOS \
