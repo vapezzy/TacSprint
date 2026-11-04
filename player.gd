@@ -347,8 +347,8 @@ func _build_viewmodel() -> void:
 	smoke.mesh = puff
 	add_child(smoke)
 	# The heat haze: slower, thinner, longer, curling upwards.
-	smoke.amount = 70
-	smoke.lifetime = 2.4
+	smoke.amount = 20
+	smoke.lifetime = 0.3
 	smoke.direction = Vector3(0, 1, 0)
 	smoke.spread = 18.0
 	smoke.gravity = Vector3(0, 0.35, 0)
@@ -367,8 +367,8 @@ func _build_viewmodel() -> void:
 	puffs = CPUParticles3D.new()
 	puffs.top_level = true
 	puffs.emitting = false
-	puffs.amount = 120
-	puffs.lifetime = 1.5
+	puffs.amount = 40
+	puffs.lifetime = 0.3
 	puffs.local_coords = false
 	puffs.spread = 26.0
 	puffs.gravity = Vector3(0, 0.25, 0)
@@ -397,9 +397,9 @@ func _build_viewmodel() -> void:
 	blast.one_shot = true
 	# Spread over the first part of its life, and moved with the muzzle every
 	# frame: the smoke keeps pouring out of the brake and trails after the rifle.
-	blast.explosiveness = 0.55
-	blast.amount = 48
-	blast.lifetime = 2.0
+	blast.explosiveness = 0.6
+	blast.amount = 30
+	blast.lifetime = 0.3
 	blast.local_coords = false
 	blast.spread = 80.0
 	blast.gravity = Vector3(0, 0.3, 0)
@@ -1262,7 +1262,8 @@ func _update_weapon(dt: float) -> void:
 	# Smoke stays where it was let out: turn away and it hangs in the air behind.
 	heat = maxf(heat - dt * 0.45, 0.0)
 	var muzzle_at := _apparent(w["muzzle"])
-	smoke.emitting = heat > 0.25 and not w["melee"]
+	# All smoke is short-lived: only right after a shot, gone within 0.3 s.
+	smoke.emitting = heat > 0.25 and clock - last_shot < 0.15 and not w["melee"]
 	smoke.global_position = muzzle_at
 	puffs.emitting = clock - last_shot < 0.05 and not w["melee"]
 	puffs.global_position = muzzle_at
