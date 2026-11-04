@@ -174,6 +174,7 @@ var turn := Vector2.ZERO      # how fast the view is turning, radians per second
 var last_look := Vector2.ZERO
 var fire_cd := 0.0
 var reloading := 0.0
+var _swap_broke_reload := false  # the swap under way started in the middle of a reload
 var mag_in := false
 var reload_cancels := 0
 var burst := 0
@@ -394,9 +395,11 @@ func _build_viewmodel() -> void:
 	blast.top_level = true
 	blast.emitting = false
 	blast.one_shot = true
-	blast.explosiveness = 0.9
-	blast.amount = 90
-	blast.lifetime = 2.2
+	# Spread over the first part of its life, and moved with the muzzle every
+	# frame: the smoke keeps pouring out of the brake and trails after the rifle.
+	blast.explosiveness = 0.55
+	blast.amount = 48
+	blast.lifetime = 2.0
 	blast.local_coords = false
 	blast.spread = 80.0
 	blast.gravity = Vector3(0, 0.3, 0)
@@ -412,7 +415,7 @@ func _build_viewmodel() -> void:
 	billow.add_point(Vector2(1.0, 4.2))
 	blast.scale_amount_curve = billow
 	var thick := Gradient.new()
-	thick.colors = PackedColorArray([Color(0.85, 0.84, 0.82, 0.0), Color(0.8, 0.79, 0.77, 0.17), Color(0.72, 0.72, 0.72, 0.0)])
+	thick.colors = PackedColorArray([Color(0.85, 0.84, 0.82, 0.0), Color(0.8, 0.79, 0.77, 0.1), Color(0.72, 0.72, 0.72, 0.0)])
 	thick.offsets = PackedFloat32Array([0.0, 0.08, 1.0])
 	blast.color_ramp = thick
 	blast.mesh = puff
@@ -618,6 +621,7 @@ func swap(index: int) -> void:
 		bolt_cycles += 1
 	bolt_t = 0.0
 	swapped = false
+	_swap_broke_reload = reloading > 0.0
 	reloading = 0.0
 	swaps += 1
 
@@ -655,6 +659,11 @@ func _yy() -> void:
 	swap_to = slot
 	swap_t = maxf(1.0 - swap_t, 0.5)
 	fire_cd = minf(fire_cd, 0.12)
+	if _swap_broke_reload:
+		# YY out of a reload: the reload is simply called off, the magazine you
+		# had stays in, and the weapon is straight back up.
+		swap_t = maxf(swap_t, 0.82)
+		_swap_broke_reload = false
 
 
 # Weapon, arms and the player's own body go on visual layer 2, so the scope's
@@ -1105,10 +1114,15 @@ func _update_weapon(dt: float) -> void:
 			var take := mini(mag_size - ammo, reserve)
 			ammo += take
 			reserve -= take
-		# Sprinting or pulling the trigger breaks off the reload.
-		var cancel: bool = sprinting or (_just("fire") and ammo > 0)
+		# Sprinting or pulling the trigger breaks off the reload; a pull of the
+		# trigger fires at once, in the same moment.
+		var shoot_out: bool = _just("fire") and ammo > 0
+		var cancel: bool = sprinting or shoot_out
 		if cancel:
 			reload_cancels += 1
+		if shoot_out:
+			fire_cd = 0.0
+			inspect_p = 0.0
 		if cancel or reloading <= 0.0:
 			reloading = 0.0
 	elif mag_size > 0 and reserve > 0 and not busy and _just("reload") and ammo < mag_size:
@@ -1252,6 +1266,9 @@ func _update_weapon(dt: float) -> void:
 	smoke.global_position = muzzle_at
 	puffs.emitting = clock - last_shot < 0.05 and not w["melee"]
 	puffs.global_position = muzzle_at
+	if blast.emitting:
+		blast.global_position = muzzle_at
+		blast.direction = -cam.global_transform.basis.z
 	puffs.direction = -cam.global_transform.basis.z + Vector3(0, 0.15, 0)
 	_update_laser()
 	kick = move_toward(kick, 0.0, dt * 0.55)

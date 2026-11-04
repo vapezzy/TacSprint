@@ -730,9 +730,7 @@ void fragment() {
 	float thick = max(step(abs(d.x), 0.003) * step(rad * 0.42, abs(d.y)), step(abs(d.y), 0.003) * step(rad * 0.42, abs(d.x)));
 	c = mix(c, vec3(0.0), max(line, thick));
 	c *= 1.0 - (1.0 - settle) * 0.7 * smoothstep(rad * 0.35, rad, r);
-	// Outside the lens: black, fading in as you scope in, like the scope's body
-	// filling your view.
-	COLOR = vec4(c * inside, max(inside, smoothstep(0.0, 0.6, settle)));
+	COLOR = vec4(c, inside);
 }
 """
 	scope_mat = ShaderMaterial.new()
@@ -2037,6 +2035,40 @@ func effect_blast(kind: String, at: Vector3) -> void:
 
 
 func _run_flash_test() -> void:
+	if OS.get_cmdline_user_args().has("--reloadtest"):
+		for wid: String in ["smg", "sniper"]:
+			menu.set_weapon("primary", wid)
+			await _wait(0.8)
+			player.ammo = 3
+			player.ai = {"reload": true}
+			await _wait(0.1)
+			player.ai = {}
+			await _wait(0.4)
+			var before: int = player.ammo
+			var was: bool = player.reloading > 0.0
+			player.ai = {"fire": true}
+			await _wait(0.05)
+			player.ai = {}
+			await _wait(0.05)
+			print("RELOADTEST ", wid, " fire-cancel: was_reloading=", was, " reloading_now=", player.reloading > 0.0, " ammo ", before, "->", player.ammo)
+			await _wait(1.6)
+			player.ammo = 2
+			player.ai = {"reload": true}
+			await _wait(0.1)
+			player.ai = {}
+			await _wait(0.5)
+			var slot_before: int = player.slot
+			player.ai = {"swap": true}
+			await _wait(0.05)
+			player.ai = {}
+			await _wait(0.08)
+			player.ai = {"swap": true}
+			await _wait(0.05)
+			player.ai = {}
+			await _wait(0.6)
+			print("RELOADTEST ", wid, " yy-cancel: reloading_now=", player.reloading > 0.0, " slot ", slot_before, "->", player.slot, " ammo=", player.ammo, " swap_t=", player.swap_t)
+		get_tree().quit(0)
+		return
 	if OS.get_cmdline_user_args().has("--snipershot"):
 		menu.set_weapon("primary", "sniper")
 		menu.set_skin(5)
