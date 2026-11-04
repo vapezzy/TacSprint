@@ -157,11 +157,31 @@ void fragment() {
 		metal = 1.0 - dust * 0.7;
 		nn = tri_normal(scratch_n, op * 7.0, n, w, 0.3);
 	} else if (zone < 3.5) {
-		// Coated glass (scope lenses): almost black, a green-violet sheen at an angle.
-		float facing = abs(dot(n, normalize((inverse(VIEW_MATRIX * MODEL_MATRIX) * vec4(VIEW, 0.0)).xyz)));
-		albedo = mix(vec3(0.03, 0.06, 0.05), vec3(0.05, 0.02, 0.07), facing) * 0.6;
-		rough = 0.02;
-		metal = 0.5;
+		// Coated glass (scope lenses): a dark mirror. It reflects the sky and
+		// the ground around you, tinted green-violet by the coating, strongest at
+		// a glancing angle, with a hard glint where the sun catches it.
+		vec3 nv = normalize((VIEW_MATRIX * MODEL_MATRIX * vec4(n, 0.0)).xyz);
+		vec3 rv = reflect(-VIEW, nv);
+		vec3 rw = normalize((INV_VIEW_MATRIX * vec4(rv, 0.0)).xyz);
+		float up = rw.y;
+		vec3 sky = mix(vec3(0.55, 0.62, 0.7), vec3(0.18, 0.32, 0.62), smoothstep(0.0, 0.7, up));
+		vec3 ground = mix(vec3(0.16, 0.18, 0.12), vec3(0.3, 0.3, 0.28), smoothstep(-0.5, 0.0, up));
+		vec3 env = up > 0.0 ? sky : ground;
+		float facing = clamp(dot(nv, VIEW), 0.0, 1.0);
+		float fres = 0.18 + 0.82 * pow(1.0 - facing, 3.0);
+		vec3 coat = mix(vec3(0.55, 0.95, 0.75), vec3(0.75, 0.55, 1.0), 1.0 - facing);
+		glow_col += env * coat * fres * 1.1;
+		glow_col += vec3(1.0, 0.95, 0.85) * pow(max(rw.y, 0.0), 40.0) * 2.0;
+		// The curved lens: a bright arc of reflected sky across the upper part and
+		// a soft second band below, moving as the rifle turns.
+		vec2 l = vec2(op.x, op.y - 0.078) / 0.025;
+		float turn = dot(rw.xz, vec2(0.7, 0.7)) * 0.6;
+		float arc = smoothstep(0.16, 0.0, abs(length(l - vec2(0.35 + turn, -0.55)) - 0.95)) * step(length(l), 1.0);
+		float band = smoothstep(0.35, 0.0, abs(l.y + l.x * 0.4 - 0.35 - turn * 0.5)) * step(length(l), 1.0);
+		glow_col += coat * (vec3(0.75, 0.85, 0.95) * arc * 0.55 + vec3(0.4, 0.5, 0.55) * band * 0.25);
+		albedo = vec3(0.004, 0.006, 0.008);
+		rough = 0.0;
+		metal = 1.0;
 	} else if (zone < 4.5) {
 		// Brass cartridge cases.
 		albedo = vec3(0.9, 0.62, 0.22) * mix(0.8, 1.0, mid);
