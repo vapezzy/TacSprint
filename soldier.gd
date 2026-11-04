@@ -139,13 +139,13 @@ func setup(team_color: Color, enemy_look: bool) -> void:
 		var m := _model(upper, "soldier_upper_arm.bin" if i % 2 == 0 else "soldier_forearm.bin", cloth)
 		arm_parts.append(m)
 	for i in 2:
-		var h := _part(upper, _sphere(0.048, 0.09), glove, Vector3.ZERO)
-		h.scale = Vector3(0.8, 0.9, 1.25)
-		hands.append(h)
+		hands.append(_model(upper, "soldier_hand.bin", cloth))
+	# Shoulders, neck base and upper chest, so arms and head grow out of the body.
+	_model(upper, "soldier_shoulders.bin", cloth)
 	var ring := CylinderMesh.new()
-	ring.top_radius = 0.072
-	ring.bottom_radius = 0.072
-	ring.height = 0.06
+	ring.top_radius = 0.056
+	ring.bottom_radius = 0.054
+	ring.height = 0.045
 	var armband := _part(arm_parts[2], ring, band, Vector3(0, 0.03, 0))
 	armband.name = "Band"
 	# Pouches on the belt and a small pack on the back.
@@ -241,7 +241,11 @@ func _solve_arms() -> void:
 		var e := _joint(s, h, targets[i][2], UPPER_ARM, FOREARM)
 		_span(arm_parts[i * 2], s, e)
 		_span(arm_parts[i * 2 + 1], e, h)
-		hands[i].transform = Transform3D(Basis.looking_at(to_upper.basis * Vector3.FORWARD, Vector3.UP), h)
+		# The left hand is the right one mirrored.
+		var turn := Basis.looking_at(to_upper.basis * Vector3.FORWARD, Vector3.UP)
+		if i == 1:
+			turn = turn * Basis.from_scale(Vector3(-1, 1, 1))
+		hands[i].transform = Transform3D(turn, h)
 
 
 # speed: how fast the figure moves over the ground; dt: frame time.

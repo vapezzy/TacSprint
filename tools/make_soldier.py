@@ -120,14 +120,51 @@ FORE = 0.28
 
 
 def upper_arm(p):
-    d = seg(p, v(0, -UPPER / 2 - 0.02, 0), v(0, UPPER / 2, 0), 0.066, 0.054)
-    d = smin(d, ball(p, v(0, -UPPER / 2 + 0.01, -0.005), 0.07), 0.03)      # the shoulder
+    """Upper arm in the sleeve: round where it leaves the deltoid, a biceps at the
+    front, narrowing to the elbow; folds and a pocket on the outside."""
+    d = seg(p, v(0, -UPPER / 2 - 0.01, 0), v(0, UPPER / 2, 0), 0.057, 0.049)
+    d = smin(d, ellipsoid(p, v(0, -0.01, 0.018), (0.042, 0.075, 0.04)), 0.02)       # biceps
+    d = smin(d, ellipsoid(p, v(0, -0.03, -0.016), (0.04, 0.08, 0.036)), 0.02)       # triceps
     y = p[:, 1]
     ang = np.arctan2(p[:, 0], p[:, 2])
     folds = np.sin(2 * np.pi * y / 0.05 + 1.6 * np.sin(2 * ang)) * np.clip((y + 0.02) / 0.12, 0, 1)
-    d = d - 0.0025 * folds
-    # A pocket on the outside of the sleeve.
-    return smin(d, box(p, v(0.058, -0.03, 0.0), (0.008, 0.035, 0.03), 0, 0.006), 0.006)
+    d = d - 0.0022 * folds
+    return smin(d, box(p, v(0.054, -0.04, 0.0), (0.008, 0.035, 0.03), 0, 0.006), 0.006)
+
+
+def shoulders(p):
+    """The top of the body in the uniform, in the aiming frame (soldier.gd: the
+    upper body's pivot, +Y up, -Z forward): the slope of the trapezius from the
+    neck out to each shoulder, round deltoids over the joints, the upper chest
+    and back filling out the vest's opening, and a collar round the neck."""
+    d = ellipsoid(p, v(0, -0.03, 0.0), (0.165, 0.085, 0.105))
+    for sx in (-1.0, 1.0):
+        trap = seg(p, v(sx * 0.045, 0.085, 0.02), v(sx * 0.165, 0.03, 0.0), 0.05, 0.058)
+        d = smin(d, trap, 0.04)
+        delt = ellipsoid(p, v(sx * 0.19, 0.0, -0.008), (0.062, 0.072, 0.068))
+        d = smin(d, delt, 0.035)
+    collar = ellipsoid(p, v(0, 0.075, 0.018), (0.072, 0.04, 0.066))
+    d = smin(d, collar, 0.02)
+    y = p[:, 1]
+    ang = np.arctan2(p[:, 0], p[:, 2])
+    return d - 0.0018 * np.sin(2 * np.pi * y / 0.045 + 2.0 * np.sin(2 * ang))
+
+
+def hand(p):
+    """A gloved hand closed round a grip, in the hand frame: -Z the way the
+    rifle points, +Y up. Back of the hand outwards (+X), four finger rolls
+    curled under the grip, the thumb wrapped over the top, a knuckle guard."""
+    d = box(p, v(0.012, 0.0, 0.01), (0.016, 0.042, 0.038), 0, 0.014)
+    for i in range(4):
+        yy = 0.03 - i * 0.021
+        r = 0.0105 - i * 0.0008
+        finger = seg(p, v(0.02, yy, -0.022), v(-0.012, yy - 0.003, -0.036), r)
+        finger = smin(finger, seg(p, v(-0.012, yy - 0.003, -0.036), v(-0.026, yy - 0.006, -0.012), r * 0.92), 0.004)
+        d = smin(d, finger, 0.006)
+    thumb = seg(p, v(0.0, 0.035, 0.03), v(-0.022, 0.05, -0.008), 0.0115, 0.0095)
+    d = smin(d, thumb, 0.008)
+    # The cuff where the glove meets the sleeve.
+    return smin(d, seg(p, v(0.01, 0.0, 0.03), v(0.01, 0.0, 0.07), 0.034, 0.038), 0.012)
 
 
 def forearm(p):
@@ -161,5 +198,7 @@ if __name__ == "__main__":
     build("soldier_goggles", [(3, goggles)], (-0.11, -0.02, -0.12), (0.11, 0.06, 0.12), 0.0012, 0.2)
     build("soldier_eyes", [(7, head_eyes)], (-0.05, 0.0, -0.1), (0.05, 0.032, -0.06), 0.0014, 0.4)
     build("soldier_helmet", [(3, helmet)], (-0.12, -0.03, -0.13), (0.12, 0.15, 0.13), 0.0018, 0.1)
+    build("soldier_shoulders", [(0, shoulders)], (-0.29, -0.13, -0.13), (0.29, 0.14, 0.13), 0.0022, 0.12)
+    build("soldier_hand", [(1, hand)], (-0.05, -0.06, -0.06), (0.06, 0.08, 0.09), 0.0012, 0.25)
     build("soldier_upper_arm", [(0, upper_arm)], (-0.09, -0.24, -0.09), (0.09, 0.2, 0.09), 0.002, 0.1)
     build("soldier_forearm", [(0, forearm), (3, glove)], (-0.07, -0.18, -0.07), (0.07, 0.17, 0.07), 0.002, 0.1)
