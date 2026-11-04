@@ -1716,8 +1716,8 @@ func _update_view(dt: float) -> void:
 		# picture (the aimed position is not touched).
 		pos.x += HIP_RIGHT
 		rot.y -= HIP_YAW
-		if w["two_handed"]:
-			pos.z += HIP_BACK
+		if w["two_handed"] and not w.has("bolt"):
+			pos.z += HIP_BACK       # not the sniper: it stays where it was
 	pos = pos.lerp(Vector3(0.0, -float(w["sight_y"]), float(w["ads_z"])), ads_amt)
 	rot = rot.lerp(Vector3.ZERO, ads_amt)
 	# Inspect runs in three steps while the key is held and backwards when it is let go:
