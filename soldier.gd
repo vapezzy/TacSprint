@@ -67,7 +67,11 @@ func setup(team_color: Color, enemy_look: bool) -> void:
 	glove.uv1_scale = Vector3.ONE * 8.0
 	var skin := StandardMaterial3D.new()
 	skin.albedo_color = Color(0.55, 0.4, 0.31) if randf() < 0.6 else Color(0.33, 0.23, 0.17)
-	skin.roughness = 0.6
+	skin.roughness = 0.55
+	skin.subsurf_scatter_enabled = true
+	skin.subsurf_scatter_strength = 0.35
+	skin.rim_enabled = true
+	skin.rim = 0.25
 	var metal := StandardMaterial3D.new()
 	metal.albedo_color = Color(0.07, 0.072, 0.075)
 	metal.metallic = 0.55
@@ -82,56 +86,38 @@ func setup(team_color: Color, enemy_look: bool) -> void:
 	upper.position = PIVOT
 	add_child(upper)
 
-	# Head: neck, face (a balaclava for the enemies), helmet with cover and rim,
-	# ear protection and a night-vision mount on the front.
+	# Head: a sculpted face and neck (tools/make_soldier.py), eyes, a high-cut
+	# helmet with ear protection under it. The enemies pull a balaclava over the face.
 	head = Node3D.new()
-	head.position = Vector3(0, 0.25, 0.0)
+	head.position = Vector3(0, 0.215, 0.0)
 	upper.add_child(head)
-	_part(head, _capsule(0.058, 0.16), sleeve, Vector3(0, -0.09, 0.01))
-	# A balaclava over the face, a strip of skin round the eyes, tinted glasses over them.
-	var mask := StandardMaterial3D.new()
-	mask.albedo_color = Color(0.03, 0.03, 0.03) if enemy_look else Color(0.11, 0.12, 0.08)
-	mask.roughness = 0.95
-	mask.normal_enabled = true
-	mask.normal_texture = Assets.tex("stretch_poplin_nor_gl.jpg")
-	mask.uv1_triplanar = true
-	mask.uv1_scale = Vector3.ONE * 10.0
-	var face := _part(head, _sphere(0.1, 0.24), mask, Vector3(0, 0.0, -0.005))
-	face.scale = Vector3(0.95, 1.0, 1.05)
-	var eyes := BoxMesh.new()
-	eyes.size = Vector3(0.15, 0.045, 0.03)
-	_part(head, eyes, skin, Vector3(0, 0.025, -0.088))
-	var lens := StandardMaterial3D.new()
-	lens.albedo_color = Color(0.05, 0.06, 0.07)
-	lens.metallic = 0.8
-	lens.roughness = 0.08
-	var shades := BoxMesh.new()
-	shades.size = Vector3(0.175, 0.04, 0.025)
-	_part(head, shades, lens, Vector3(0, 0.027, -0.1))
-	var helmet := SphereMesh.new()
-	helmet.radius = 0.132
-	helmet.height = 0.132
-	helmet.is_hemisphere = true
-	var lid := _part(head, helmet, gear, Vector3(0, 0.035, 0.008))
-	lid.scale = Vector3(1.0, 1.05, 1.08)
-	var rim := CylinderMesh.new()
-	rim.top_radius = 0.136
-	rim.bottom_radius = 0.14
-	rim.height = 0.03
-	_part(head, rim, gear, Vector3(0, 0.04, 0.008)).scale = Vector3(1.0, 1.0, 1.08)
+	var face_mat := skin
+	if enemy_look:
+		face_mat = StandardMaterial3D.new()
+		face_mat.albedo_color = Color(0.035, 0.035, 0.035)
+		face_mat.roughness = 0.95
+		face_mat.normal_enabled = true
+		face_mat.normal_texture = Assets.tex("stretch_poplin_nor_gl.jpg")
+		face_mat.uv1_triplanar = true
+		face_mat.uv1_scale = Vector3.ONE * 12.0
+	_model(head, "soldier_head.bin", face_mat)
+	var eye := StandardMaterial3D.new()
+	eye.albedo_color = Color(0.08, 0.06, 0.05)
+	eye.roughness = 0.08
+	eye.metallic_specular = 0.9
+	_model(head, "soldier_eyes.bin", eye)
+	var shell := gear.duplicate() as StandardMaterial3D
+	shell.albedo_color = Color(0.06, 0.06, 0.065) if enemy_look else Color(0.3, 0.27, 0.19)
+	_model(head, "soldier_helmet.bin", shell)
 	for sx: float in [-1.0, 1.0]:
 		var cup := CylinderMesh.new()
-		cup.top_radius = 0.045
-		cup.bottom_radius = 0.05
-		cup.height = 0.045
-		_part(head, cup, gear, Vector3(sx * 0.115, -0.005, 0.01), Vector3(0, 0, PI / 2.0))
+		cup.top_radius = 0.04
+		cup.bottom_radius = 0.045
+		cup.height = 0.04
+		_part(head, cup, gear, Vector3(sx * 0.09, 0.0, 0.004), Vector3(0, 0, PI / 2.0))
 	var mount := BoxMesh.new()
-	mount.size = Vector3(0.05, 0.04, 0.03)
-	_part(head, mount, metal, Vector3(0, 0.105, -0.125))
-	var rail := BoxMesh.new()
-	rail.size = Vector3(0.015, 0.02, 0.12)
-	for sx: float in [-1.0, 1.0]:
-		_part(head, rail, metal, Vector3(sx * 0.12, 0.07, 0.0))
+	mount.size = Vector3(0.045, 0.035, 0.03)
+	_part(head, mount, metal, Vector3(0, 0.082, -0.122))
 
 	# The rifle: the player's own KR-4 model with a magazine and a holo sight.
 	gun = Node3D.new()
@@ -149,9 +135,7 @@ func setup(team_color: Color, enemy_look: bool) -> void:
 
 	# Arms: upper arm and forearm in the uniform, gloves, the band on the left arm.
 	for i in 4:
-		var radius := 0.068 if i % 2 == 0 else 0.058
-		var length := UPPER_ARM if i % 2 == 0 else FOREARM
-		var m := _part(upper, _capsule(radius, length + radius * 1.6), sleeve, Vector3.ZERO)
+		var m := _model(upper, "soldier_upper_arm.bin" if i % 2 == 0 else "soldier_forearm.bin", cloth)
 		arm_parts.append(m)
 	for i in 2:
 		var h := _part(upper, _sphere(0.048, 0.09), glove, Vector3.ZERO)
@@ -168,6 +152,14 @@ func setup(team_color: Color, enemy_look: bool) -> void:
 	pack.size = Vector3(0.24, 0.28, 0.09)
 	_part(upper, pack, gear, Vector3(0, -0.12, 0.17))
 	_solve_arms()
+
+
+func _model(parent: Node3D, file: String, mat: Material) -> MeshInstance3D:
+	var m := MeshInstance3D.new()
+	m.mesh = Assets.mesh(file)
+	m.material_override = mat
+	parent.add_child(m)
+	return m
 
 
 func _urban_camo() -> Texture2D:

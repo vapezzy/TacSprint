@@ -2361,6 +2361,17 @@ func _soldier_shots() -> void:
 				f.call("animate", 1.0 / 60.0, float(v[2]), bool(v[3]))
 			await get_tree().process_frame
 		await _save_view(v[0])
+	# Close up on the faces.
+	for i in 2:
+		var f: Node3D = figs[i]
+		var eye := cam.global_position - cam.global_basis.z * 0.75 + cam.global_basis.x * (i * 0.34 - 0.17)
+		f.global_position = Vector3(eye.x, eye.y - 1.63 - 0.03, eye.z)
+		f.look_at(Vector3(cam.global_position.x, f.global_position.y, cam.global_position.z), Vector3.UP)
+	for k in 20:
+		for f: Node3D in figs:
+			f.call("animate", 1.0 / 60.0, 0.0, false)
+		await get_tree().process_frame
+	await _save_view("soldier_face")
 
 
 
