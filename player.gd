@@ -110,6 +110,10 @@ var ads_amt := 0.0
 var sprint_amt := 0.0
 var tac_amt := 0.0
 var inspect_p := 0.0
+var _hip_shot := true         # the last shot was from the hip (only then is there smoke)
+var inspect_seq := 0.0        # tap F: the whole inspect plays by itself (seconds into it, 0 = off)
+var inspect_bolt := 0.0       # the bolt worked during an inspect (pose_bolt's 0-1)
+var inspect_chamber := 0.0    # how far the rifle is turned to look into the open chamber
 var ammo := MAG
 
 # Class system: one primary and one secondary; w is the weapon in hand.
@@ -1161,7 +1165,8 @@ func _update_weapon(dt: float) -> void:
 		if bolt_t >= 1.0:
 			bolt_t = 0.0
 			bolt_cycles += 1
-	vmodel.pose_bolt(maxf(bolt_t, 0.0))
+	vmodel.pose_bolt(inspect_bolt if inspect_bolt > 0.0 else maxf(bolt_t, 0.0))
+	vmodel.show_chamber_round(inspect_bolt > 0.32 and ammo > 0)
 	flash_t = maxf(flash_t - dt, 0.0)
 	stun_t = maxf(stun_t - dt, 0.0)
 	# Lethal equipment comes up in the right hand at once (the weapon drops away) and
@@ -1263,9 +1268,9 @@ func _update_weapon(dt: float) -> void:
 	heat = maxf(heat - dt * 0.45, 0.0)
 	var muzzle_at := _apparent(w["muzzle"])
 	# All smoke is short-lived: only right after a shot, gone within 0.3 s.
-	smoke.emitting = heat > 0.25 and clock - last_shot < 0.15 and not w["melee"]
+	smoke.emitting = heat > 0.25 and clock - last_shot < 0.15 and not w["melee"] and _hip_shot
 	smoke.global_position = muzzle_at
-	puffs.emitting = clock - last_shot < 0.05 and not w["melee"]
+	puffs.emitting = clock - last_shot < 0.05 and not w["melee"] and _hip_shot
 	puffs.global_position = muzzle_at
 	if blast.emitting:
 		blast.global_position = muzzle_at
@@ -1327,7 +1332,8 @@ func _fire() -> void:
 		shake = minf(shake + 0.32, 1.0)
 	vmodel.hand_shot(float(w.get("kick", 1.0)) * minf(float(w["recoil"]), 2.0))
 	heat = minf(heat + (1.6 if w.has("bolt") else 0.12), 3.0)
-	if w.has("bolt") and not w.get("suppressed", false):
+	_hip_shot = ads_amt < 0.5
+	if w.has("bolt") and not w.get("suppressed", false) and _hip_shot:
 		blast.global_position = _apparent(w["muzzle"])
 		blast.direction = -cam.global_transform.basis.z
 		blast.restart()
@@ -1705,12 +1711,17 @@ func _update_view(dt: float) -> void:
 	rot = rot.lerp(Vector3.ZERO, ads_amt)
 	# Inspect runs in three steps while the key is held and backwards when it is let go:
 	# 0-1 raise the weapon, 1-2 the support hand reaches the magazine, 2-3 it shows the magazine.
-	var want_inspect: bool = held["inspect"] and not sprinting and not mantling and not sliding \
-			and not held["ads"] and not held["fire"] and reloading <= 0.0 and stance != Stance.PRONE and swap_t <= 0.0
-	var step_time: float = [0.32, 0.26, 0.42][clampi(int(inspect_p if want_inspect else inspect_p - 0.001), 0, 2)]
-	# One-handed weapons are only turned over; there is no magazine for the other hand to pull.
-	var inspect_end := 3.0 if w["two_handed"] else 1.0
-	inspect_p = move_toward(inspect_p, inspect_end if want_inspect else 0.0, dt / step_time)
+	# Tap F and the whole inspect plays by itself; F again, aiming, firing,
+	# sprinting, reloading or a swap break it off.
+	var can_inspect: bool = not sprinting and not mantling and not sliding and not held["ads"] and not held["fire"] \
+			and reloading <= 0.0 and stance != Stance.PRONE and swap_t <= 0.0 and bolt_t == 0.0
+	if _just("inspect"):
+		inspect_seq = 0.0 if inspect_seq > 0.0 else (0.001 if can_inspect else 0.0)
+	elif not can_inspect:
+		inspect_seq = 0.0
+	var want := _inspect_plan(dt)
+	var step_time: float = [0.3, 0.26, 0.4][clampi(int(inspect_p if want > inspect_p else inspect_p - 0.001), 0, 2)]
+	inspect_p = move_toward(inspect_p, want, dt / step_time)
 	var ins := smoothstep(0.0, 1.0, clampf(inspect_p, 0.0, 1.0))
 	pos = pos.lerp(INSPECT_POS, ins)
 	# Reloading: the weapon is canted so the magazine well turns towards the support
@@ -1816,6 +1827,14 @@ func _update_view(dt: float) -> void:
 	vm.position = vm.position.lerp(pos, 1.0 - exp(-30.0 * dt))
 	# Rotations are blended as quaternions so the big turn into the inspect stays clean.
 	var held_up := Basis(Vector3.BACK, deg_to_rad(INSPECT_ROLL)) * Basis(Vector3.UP, deg_to_rad(INSPECT_YAW))
+	if w.has("bolt"):
+		# A heavy bolt rifle is not rolled on its side: muzzle to the left, upright,
+		# its left side towards you, the support hand staying under it on the grip.
+		held_up = Basis(Vector3.RIGHT, deg_to_rad(12.0)) * Basis(Vector3.UP, deg_to_rad(72.0))
+	# Looking into the chamber: muzzle to the left and the top of the rifle tipped towards you, so you
+	# look down into the open action past the lifted bolt handle.
+	var chamber := Basis(Vector3.RIGHT, deg_to_rad(42.0)) * Basis(Vector3.UP, deg_to_rad(80.0)) * Basis(Vector3.BACK, deg_to_rad(-12.0))
+	held_up = held_up.slerp(chamber, smoothstep(0.0, 1.0, inspect_chamber))
 	held_up = held_up * Basis.from_euler(Vector3(drift.y * 0.05, drift.x * 0.07, breath * 0.012))
 	var facing := Basis.from_euler(rot).slerp(held_up, ins)
 	# The wiper swing turns the gun in the plane of the screen only: it keeps showing its side.
@@ -1845,3 +1864,68 @@ func speed_h() -> float:
 
 func state_name() -> String:
 	return POV_LABELS[pov]
+
+
+
+# The inspect timeline. Returns how far the weapon should be raised (inspect_p's
+# 0-3) and drives the bolt and the turn to the chamber on the way.
+#   Bolt rifle: raise and look the rifle over, work the bolt open, turn it to
+#   look at the round in the chamber, close the bolt, lower it.
+#   Rifles with a magazine: raise, look it over, the support hand pulls the
+#   magazine and shows it, puts it back, a pull on the charging handle, lower.
+#   One-handed: raise, turn it over, lower.
+func _inspect_plan(dt: float) -> float:
+	inspect_bolt = 0.0
+	var chamber_want := 0.0
+	if inspect_seq <= 0.0:
+		inspect_chamber = move_toward(inspect_chamber, 0.0, dt * 3.0)
+		return 0.0
+	var before := inspect_seq
+	inspect_seq += dt
+	var t := inspect_seq
+	var crossed := func(at: float) -> bool: return before < at and t >= at
+	var sfx := str(w.get("sfx", ""))
+	if w.has("bolt"):
+		var length := 5.6
+		if t >= length:
+			inspect_seq = 0.0
+			return 0.0
+		# 1.6-2.5 the handle is lifted out towards the chest and the bolt drawn
+		# back part of the way, held there while you look in, then pushed home
+		# and turned down the same way it came by 4.2.
+		if t > 1.6 and t < 4.2:
+			if t < 2.5:
+				inspect_bolt = remap(t, 1.6, 2.5, 0.001, 0.4)
+			elif t < 3.6:
+				inspect_bolt = 0.4
+			else:
+				inspect_bolt = remap(t, 3.6, 4.2, 0.4, 0.001)
+		# Turn the rifle round to look into the action from 1.3 s, back by 4.4 s.
+		if t > 1.3 and t < 4.0:
+			chamber_want = 1.0
+		inspect_chamber = move_toward(inspect_chamber, chamber_want, dt * 1.8)
+		if crossed.call(1.85):
+			_play("bolt", "sniper_bolt_open.wav", -6.0)
+			_jolt(3.0, 0.0, -2.0)
+		if crossed.call(3.85):
+			_play("bolt", "sniper_bolt_close.wav", -6.0)
+			_jolt(-4.0, 0.0, 2.0)
+		return 1.0 if t < length - 0.6 else 0.0
+	if w["two_handed"]:
+		var length := 5.2
+		if t >= length:
+			inspect_seq = 0.0
+			return 0.0
+		if crossed.call(4.0) and sfx != "":
+			_play("bolt", sfx + "_charge.wav", -8.0)
+			_jolt(7.0, 1.0, -5.0)
+		if t < 1.4:
+			return 1.0
+		if t < 3.4:
+			return 3.0
+		return 1.0 if t < length - 0.6 else 0.0
+	var short := 2.4
+	if t >= short:
+		inspect_seq = 0.0
+		return 0.0
+	return 1.0 if t < short - 0.5 else 0.0

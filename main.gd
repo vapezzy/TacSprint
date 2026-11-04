@@ -2085,16 +2085,31 @@ func _run_flash_test() -> void:
 		await _save_view("sniper_smoke_b")
 		await _wait(1.5)
 		player.ai = {"inspect": true}
-		await _wait(1.6)
-		await _save_view("sniper_inspect")
+		await get_tree().physics_frame
+		await get_tree().physics_frame
 		player.ai = {}
-		await _wait(0.6)
+		await _wait(1.1)
+		await _save_view("sniper_inspect")
+		print("INSPECT sniper_inspect seq=", player.inspect_seq, " bolt=", player.inspect_bolt, " chamber=", player.inspect_chamber, " p=", player.inspect_p)
+		await _wait(1.6)
+		await _save_view("sniper_inspect_chamber")
+		print("INSPECT sniper_inspect_chamber seq=", player.inspect_seq, " bolt=", player.inspect_bolt, " chamber=", player.inspect_chamber, " p=", player.inspect_p)
+		await _wait(1.0)
+		await _save_view("sniper_inspect_close")
+		print("INSPECT sniper_inspect_close seq=", player.inspect_seq, " bolt=", player.inspect_bolt, " chamber=", player.inspect_chamber, " p=", player.inspect_p)
+		await _wait(2.2)
 		player.ai = {"ads": true}
 		await _wait(0.42)
 		await _save_view("sniper_ads_in")
 		await _wait(0.6)
 		await _save_view("sniper_ads")
 		player.ai = {}
+		player.ai = {"reload": true}
+		await _wait(0.1)
+		player.ai = {}
+		await _wait(1.0)
+		await _save_view("sniper_reload_mag")
+		await _wait(3.5)
 		main_menu.open(false)
 		main_menu.show_tab(1)
 		main_menu.open_editor("sniper")

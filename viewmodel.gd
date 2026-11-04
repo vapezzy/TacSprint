@@ -24,6 +24,7 @@ var left_arm: Node3D
 var right_arm: Node3D
 var bolt: Node3D             # pivot on the bore axis; the bolt mesh hangs under it
 var bolt_part: MeshInstance3D
+var chamber_round: Node3D
 const BOLT_AXIS := Vector3(0, 0.016, 0)
 # How the firing hand has to move to take hold of the bolt knob.
 # Throwing: what each hand holds, and how far through its throw it is.
@@ -81,6 +82,7 @@ var _right_give := Vector3.ZERO
 var _right_give_vel := Vector3.ZERO
 var _last_basis := Basis.IDENTITY
 var _life_t := 0.0
+var _regrip_t := 3.0
 
 
 func _init() -> void:
@@ -153,6 +155,35 @@ func _init() -> void:
 	_parent = bolt
 	bolt_part = _part("sniper_bolt.bin", weapon_mat)
 	bolt_part.position = -BOLT_AXIS
+	# The round sitting in the chamber, seen when the bolt is open in an inspect.
+	chamber_round = Node3D.new()
+	chamber_round.visible = false
+	add_child(chamber_round)
+	var brass := StandardMaterial3D.new()
+	brass.albedo_color = Color(0.85, 0.6, 0.24)
+	brass.metallic = 1.0
+	brass.roughness = 0.28
+	var copper := StandardMaterial3D.new()
+	copper.albedo_color = Color(0.78, 0.4, 0.24)
+	copper.metallic = 1.0
+	copper.roughness = 0.32
+	var case_mesh := CylinderMesh.new()
+	case_mesh.top_radius = 0.0098
+	case_mesh.bottom_radius = 0.0102
+	case_mesh.height = 0.072
+	var tip_mesh := CylinderMesh.new()
+	tip_mesh.top_radius = 0.0015
+	tip_mesh.bottom_radius = 0.0068
+	tip_mesh.height = 0.034
+	for part: Array in [[case_mesh, brass, Vector3(0, BOLT_AXIS.y, -0.05)], [tip_mesh, copper, Vector3(0, BOLT_AXIS.y, -0.103)]]:
+		var m := MeshInstance3D.new()
+		m.mesh = part[0]
+		m.material_override = part[1]
+		m.layers = 2
+		m.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		m.rotation.x = -PI / 2.0
+		m.position = part[2]
+		chamber_round.add_child(m)
 	_parent = self
 	_parent = mag
 	mag_part = _part("mag.bin", weapon_mat)
@@ -226,6 +257,11 @@ func set_weapon(w: Dictionary, plain_hold := false) -> void:
 # Working the bolt, t from 0 to 1 (0 = at rest): the firing hand leaves the
 # grip for the knob, lifts it, pulls the bolt back, pushes it home, turns it
 # down and returns to the grip.
+func show_chamber_round(on: bool) -> void:
+	if chamber_round != null:
+		chamber_round.visible = on and bolt_part.visible
+
+
 func pose_bolt(t: float) -> void:
 	var lift := 0.0
 	var slide := 0.0
@@ -480,13 +516,20 @@ func hand_life(dt: float) -> void:
 	var turn := (_last_basis.inverse() * transform.basis).get_euler() / maxf(dt, 0.0001)
 	_last_basis = transform.basis
 	turn = turn.limit_length(6.0)
-	_left_give_vel += Vector3(-turn.x * 6.0, turn.z * 7.0, 0.0) * dt
-	_right_give_vel += Vector3(-turn.x * 3.5, turn.z * 4.5, 0.0) * dt
-	_left_give_vel += (-_left_give * 220.0 - _left_give_vel * 15.0) * dt
+	# Looser hands: they lag further behind a turn, settle more softly, and now
+	# and then the support hand shifts its grip a little by itself.
+	_left_give_vel += Vector3(-turn.x * 9.0, turn.z * 10.0, 0.0) * dt
+	_right_give_vel += Vector3(-turn.x * 5.0, turn.z * 6.5, 0.0) * dt
+	_regrip_t -= dt
+	if _regrip_t <= 0.0:
+		_regrip_t = randf_range(2.5, 6.0)
+		_left_give_vel += Vector3(randf_range(-0.5, 0.5), randf_range(-0.6, 0.6), randf_range(-0.4, 0.4))
+		_right_give_vel += Vector3(randf_range(-0.25, 0.25), randf_range(-0.3, 0.3), 0.0)
+	_left_give_vel += (-_left_give * 140.0 - _left_give_vel * 10.0) * dt
 	_left_give += _left_give_vel * dt
-	_right_give_vel += (-_right_give * 260.0 - _right_give_vel * 17.0) * dt
+	_right_give_vel += (-_right_give * 170.0 - _right_give_vel * 11.0) * dt
 	_right_give += _right_give_vel * dt
-	var breathe := sin(_life_t * 1.7) * 0.004
+	var breathe := sin(_life_t * 1.7) * 0.006 + sin(_life_t * 0.63 + 1.3) * 0.003
 	_apply_give(left_arm, FIST, _left_give + Vector3(breathe, breathe * 0.6, 0.0))
 	_apply_give(right_arm, Vector3(0.0, -0.098, 0.072), _right_give)
 

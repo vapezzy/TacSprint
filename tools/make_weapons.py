@@ -530,13 +530,40 @@ def sn_scope(p):
 
 
 def sn_mag(p):
-    """A short five-round box magazine, as on the AX-50."""
-    body = box(p, v(0, -0.074, MAG_Z), (0.0152, 0.034, 0.06), 0, 0.003)
+    """A five-round box magazine, as on the AX-50: the part in the well slim, the
+    body below it wider and heavier, with windows down the sides through which
+    the stacked rounds show."""
+    upper = box(p, v(0, -0.06, MAG_Z), (0.0152, 0.022, 0.06), 0, 0.003)
+    lower = box(p, v(0, -0.092, MAG_Z), (0.0195, 0.022, 0.064), 0, 0.004)
+    body = smin(upper, lower, 0.006)
+    # Witness windows right through the side walls.
     for sx in (-1.0, 1.0):
-        for z in (-0.03, 0.0, 0.03):
-            body = cut(body, box(p, v(sx * 0.0156, -0.08, MAG_Z + z), (0.0012, 0.018, 0.009), 0, 0.0008))
-    body = cut(body, box(p, v(0, -0.036, MAG_Z), (0.011, 0.012, 0.056), 0, 0.001))
-    return np.minimum(body, box(p, v(0, -0.11, MAG_Z), (0.0168, 0.004, 0.0625), 0, 0.002))
+        for z in (-0.032, 0.0, 0.032):
+            body = cut(body, box(p, v(sx * 0.019, -0.088, MAG_Z + z), (0.006, 0.013, 0.009), 0, 0.002))
+    body = cut(body, box(p, v(0, -0.036, MAG_Z), (0.011, 0.012, 0.056), 0, 0.001))      # open top
+    body = cut(body, box(p, v(0, -0.085, MAG_Z), (0.0158, 0.03, 0.058), 0, 0.002))      # hollow inside
+    return np.minimum(body, box(p, v(0, -0.116, MAG_Z), (0.021, 0.0045, 0.067), 0, 0.002))
+
+
+# The rounds stacked inside: staggered left and right, the top one in the feed lips.
+SN_ROUNDS = [(0.0, -0.0445), (-0.0062, -0.059), (0.0062, -0.072), (-0.0062, -0.085), (0.0062, -0.098)]
+
+
+def sn_mag_brass(p):
+    d = None
+    for x, y in SN_ROUNDS:
+        c = cyl(p, v(x, y, MAG_Z + 0.05), v(x, y, MAG_Z - 0.03), 0.0078, 0.001)
+        c = np.minimum(c, cyl(p, v(x, y, MAG_Z + 0.05), v(x, y, MAG_Z + 0.046), 0.0082, 0.0005))   # rim
+        d = c if d is None else np.minimum(d, c)
+    return d
+
+
+def sn_mag_copper(p):
+    d = None
+    for x, y in SN_ROUNDS:
+        c = seg(p, v(x, y, MAG_Z - 0.03), v(x, y, MAG_Z - 0.054), 0.0062, 0.0015)
+        d = c if d is None else np.minimum(d, c)
+    return d
 
 
 def build_hi(name, groups, lo, hi, keep):

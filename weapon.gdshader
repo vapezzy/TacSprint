@@ -124,6 +124,7 @@ void fragment() {
 	float metal = 0.0;
 	vec3 nn = n;
 	vec3 glow_col = vec3(0.0);
+	float lens = 0.0;
 	if (zone < 0.5) {
 		// Black phosphate over steel.
 		albedo = skinned(vec3(0.012, 0.012, 0.013) * mix(0.8, 1.3, big), op, w, big);
@@ -157,31 +158,16 @@ void fragment() {
 		metal = 1.0 - dust * 0.7;
 		nn = tri_normal(scratch_n, op * 7.0, n, w, 0.3);
 	} else if (zone < 3.5) {
-		// Coated glass (scope lenses): a dark mirror. It reflects the sky and
-		// the ground around you, tinted green-violet by the coating, strongest at
-		// a glancing angle, with a hard glint where the sun catches it.
+		// Coated glass (scope lenses): real glass, so it reflects what is really
+		// around it - sky, sun, ground - strongest at a glancing angle (the
+		// renderer does this from the surface itself). The coating adds a faint
+		// green-violet tint to the reflection.
 		vec3 nv = normalize((VIEW_MATRIX * MODEL_MATRIX * vec4(n, 0.0)).xyz);
-		vec3 rv = reflect(-VIEW, nv);
-		vec3 rw = normalize((INV_VIEW_MATRIX * vec4(rv, 0.0)).xyz);
-		float up = rw.y;
-		vec3 sky = mix(vec3(0.55, 0.62, 0.7), vec3(0.18, 0.32, 0.62), smoothstep(0.0, 0.7, up));
-		vec3 ground = mix(vec3(0.16, 0.18, 0.12), vec3(0.3, 0.3, 0.28), smoothstep(-0.5, 0.0, up));
-		vec3 env = up > 0.0 ? sky : ground;
 		float facing = clamp(dot(nv, VIEW), 0.0, 1.0);
-		float fres = 0.18 + 0.82 * pow(1.0 - facing, 3.0);
-		vec3 coat = mix(vec3(0.55, 0.95, 0.75), vec3(0.75, 0.55, 1.0), 1.0 - facing);
-		glow_col += env * coat * fres * 1.1;
-		glow_col += vec3(1.0, 0.95, 0.85) * pow(max(rw.y, 0.0), 40.0) * 2.0;
-		// The curved lens: a bright arc of reflected sky across the upper part and
-		// a soft second band below, moving as the rifle turns.
-		vec2 l = vec2(op.x, op.y - 0.078) / 0.025;
-		float turn = dot(rw.xz, vec2(0.7, 0.7)) * 0.6;
-		float arc = smoothstep(0.16, 0.0, abs(length(l - vec2(0.35 + turn, -0.55)) - 0.95)) * step(length(l), 1.0);
-		float band = smoothstep(0.35, 0.0, abs(l.y + l.x * 0.4 - 0.35 - turn * 0.5)) * step(length(l), 1.0);
-		glow_col += coat * (vec3(0.75, 0.85, 0.95) * arc * 0.55 + vec3(0.4, 0.5, 0.55) * band * 0.25);
-		albedo = vec3(0.004, 0.006, 0.008);
+		albedo = mix(vec3(0.004, 0.012, 0.01), vec3(0.012, 0.006, 0.016), 1.0 - facing);
 		rough = 0.0;
-		metal = 1.0;
+		metal = 0.0;
+		lens = 1.0;
 	} else if (zone < 4.5) {
 		// Brass cartridge cases.
 		albedo = vec3(0.9, 0.62, 0.22) * mix(0.8, 1.0, mid);
@@ -219,7 +205,11 @@ void fragment() {
 	EMISSION = glow_col;
 	ROUGHNESS = rough;
 	METALLIC = metal;
-	SPECULAR = mix(0.24, 0.5, metal);
+	SPECULAR = lens > 0.5 ? 1.0 : mix(0.24, 0.5, metal);
+	if (lens > 0.5) {
+		CLEARCOAT = 1.0;
+		CLEARCOAT_ROUGHNESS = 0.0;
+	}
 	AO = ao;
 	AO_LIGHT_AFFECT = 0.75;
 	NORMAL = normalize((VIEW_MATRIX * MODEL_MATRIX * vec4(nn, 0.0)).xyz);

@@ -13,7 +13,7 @@ Run: python tools/make_arms.py
 """
 import numpy as np
 
-from sdf import ball, box, chunked, grad, groove, mesh, occlusion, save, seg, smin, split_by_zone, v, wear
+from sdf import ball, box, chunked, cut, grad, groove, mesh, occlusion, save, seg, smin, split_by_zone, union, v, wear
 
 HAND_STEP = 0.0008
 SLEEVE_STEP = 0.0015
@@ -127,15 +127,37 @@ class Hand:
         w, dr = self.wrist, self.dir
         d = np.minimum(d, seg(p, w + dr * 0.027, w + dr * 0.037, 0.0352))
         if self.watch:
-            # Round tactical watch worn on the inside of the wrist, the face turned
-            # in towards you as soldiers wear it: case, bezel ring and a crown,
-            # on a band right round the wrist.
-            c = w + dr * 0.034 - o * 0.0335
-            case = seg(p, c, c - o * 0.0075, 0.0118, 0.0)
-            bezel = seg(p, c - o * 0.0068, c - o * 0.0088, 0.0122, 0.0)
-            bezel = np.maximum(bezel, -seg(p, c - o * 0.006, c - o * 0.012, 0.0096, 0.0))
-            crown = seg(p, c - o * 0.004 + np.cross(dr, o) * 0.0115, c - o * 0.004 + np.cross(dr, o) * 0.0145, 0.0018)
-            d = np.minimum(d, smin(case, np.minimum(bezel, crown), 0.0015))
+            # A big tactical watch on the side of the wrist that faces up towards
+            # your eyes in this pose, so you can read it: case, a ridged bezel, a
+            # recessed dial with hour marks and two hands, crown and pushers.
+            cands = [o, -o, np.cross(dr, o), -np.cross(dr, o)]
+            f = max(cands, key=lambda u: u[1] - 0.6 * u[0])     # most upward, a little towards the middle
+            f = f / np.linalg.norm(f)
+            side = np.cross(dr, f)
+            side = side / np.linalg.norm(side)
+            # Between the glove cuff and the sleeve's hem, clear of both.
+            c = w + dr * 0.021 + f * 0.034
+            case = seg(p, c, c + f * 0.009, 0.0148, 0.0)
+            bezel = seg(p, c + f * 0.008, c + f * 0.0105, 0.0152, 0.0)
+            bezel = np.maximum(bezel, -seg(p, c + f * 0.007, c + f * 0.014, 0.0118, 0.0))
+            for k in range(24):
+                a = k * np.pi / 12.0
+                r = side * np.cos(a) + dr * np.sin(a)
+                bezel = cut(bezel, seg(p, c + f * 0.0105 + r * 0.0152, c + f * 0.0105 + r * 0.0128, 0.0008))
+            # Hour marks and hands standing proud of the dial, which sits 2 mm down.
+            dial = c + f * 0.0078
+            marks = None
+            for k in range(12):
+                a = k * np.pi / 6.0
+                r = side * np.cos(a) + dr * np.sin(a)
+                m = seg(p, dial + r * 0.0088, dial + r * 0.0105, 0.0009 if k % 3 else 0.0013)
+                marks = m if marks is None else np.minimum(marks, m)
+            hands = np.minimum(seg(p, dial, dial + (side * 0.6 + dr * 0.8) * 0.0075, 0.0008),
+                               seg(p, dial, dial + (-side * 0.9 + dr * 0.3) * 0.0095, 0.0006))
+            crown = seg(p, c + f * 0.0045 + side * 0.0145, c + f * 0.0045 + side * 0.019, 0.0021)
+            pushers = np.minimum(seg(p, c + f * 0.0045 + (side + dr * 0.8) * 0.0118, c + f * 0.0045 + (side + dr * 0.8) * 0.0145, 0.0012),
+                                 seg(p, c + f * 0.0045 + (side - dr * 0.8) * 0.0118, c + f * 0.0045 + (side - dr * 0.8) * 0.0145, 0.0012))
+            d = np.minimum(d, smin(case, union(bezel, crown, pushers, marks, hands), 0.0012))
             tab = w + dr * 0.032 + o * 0.036
             d = smin(d, seg(p, tab, tab + np.cross(dr, o) * 0.016, 0.0052), 0.002)
         else:
