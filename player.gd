@@ -1289,13 +1289,21 @@ func _fire() -> void:
 	recoil.x = minf(recoil.x, deg_to_rad(15.0))
 	# "kick": how hard the weapon punches back into the shoulder (the MP5 more than most).
 	var punch := float(w.get("kick", 1.0))
+	# From the hip the rifle is not held tight against the cheek: it jumps more.
+	var hip := 1.0 - ads_amt
+	if w.has("bolt"):
+		punch *= 1.0 + 1.1 * hip
 	kick = minf(kick + 0.05 * minf(float(w["recoil"]), 1.8) * punch, 0.11 * punch)
-	punch_roll += deg_to_rad(randf_range(-0.9, 0.9))
+	punch_roll += deg_to_rad(randf_range(-0.9, 0.9)) * (1.0 + 2.5 * hip * (1.0 if w.has("bolt") else 0.3))
+	if w.has("bolt") and hip > 0.5:
+		dip_vel -= 0.6
+		shake = minf(shake + 0.55, 1.0)
 	burst += 1
 	last_shot = clock
-	flash.light_energy = 3.2 * minf(vmodel.flash_size, 1.4) * float(w.get("flash_bright", 1.0))
+	var bright := float(w.get("flash_bright", 1.0)) * (1.0 + 0.7 * hip if w.has("bolt") else 1.0)
+	flash.light_energy = 3.2 * minf(vmodel.flash_size, 1.4) * bright
 	flash.light_color = Color(1.0, randf_range(0.62, 0.78), randf_range(0.3, 0.42))
-	vmodel.fire_flash(bool(w.get("side_flash", false)), float(w.get("flash_bright", 1.0)))
+	vmodel.fire_flash(bool(w.get("side_flash", false)), bright)
 	last_shot_silent = false
 	if w["auto"]:
 		shake = minf(shake + 0.32, 1.0)
@@ -1308,6 +1316,11 @@ func _fire() -> void:
 	var sfx := str(w.get("sfx", ""))
 	if sfx != "":
 		var level: float = {"sniper": 0.0, "ar": -2.0, "smg": -3.5, "pistol": -3.0}.get(sfx, -3.0)
+		if sfx == "sniper" and not w.get("suppressed", false):
+			# The bang: a second, lower layer of the same shot under it.
+			_play("shot_low", "sniper_shot.wav", -3.0 + 3.0 * hip)
+			if _sfx.has("shot_low"):
+				(_sfx["shot_low"] as AudioStreamPlayer).pitch_scale = 0.72
 		_play("shot", sfx + ("_shot_sup.wav" if w.get("suppressed", false) else "_shot.wav"), level)
 	if w.has("bolt"):
 		# Bolt action: the case only comes out when the bolt is pulled back.

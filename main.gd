@@ -17,6 +17,7 @@ const SdMap := preload("res://sd_map.gd")
 const Icons := preload("res://icons.gd")
 const Loading := preload("res://loading.gd")
 const MenuStage := preload("res://menu_stage.gd")
+const RangeDressing := preload("res://range_dressing.gd")
 const TouchControls := preload("res://touch_controls.gd")
 const EQUIP_ICONS := {"wurfmesser": "knife", "granate": "grenade", "blend": "flash", "betaeubung": "stun", "stim": "stim"}
 const RATTE_KILLS := 3
@@ -31,7 +32,7 @@ const WIN_SCORE := 10
 static var next_mode := ""
 
 const EXPOSURE := 0.8
-const SUN_ENERGY := 2.5
+const SUN_ENERGY := 3.3
 
 const GRID_SHADER := """
 shader_type spatial;
@@ -102,6 +103,7 @@ var shown_weapon := ""
 var scope_vp: SubViewport
 var scope_cam: Camera3D
 var scope_mat: ShaderMaterial
+var _scope_settle := 0.0
 var hitmarker: Hitmarker
 var fps_label: Label
 var equip_label: Label
@@ -473,7 +475,7 @@ func _build_environment() -> void:
 	env.glow_blend_mode = Environment.GLOW_BLEND_MODE_SOFTLIGHT
 	# Sunlight in the air: shafts of light between the containers, haze in the distance.
 	env.volumetric_fog_enabled = true
-	env.volumetric_fog_density = 0.011
+	env.volumetric_fog_density = 0.0075
 	env.volumetric_fog_albedo = Color(0.9, 0.9, 0.88)
 	env.volumetric_fog_anisotropy = 0.65
 	env.volumetric_fog_length = 70.0
@@ -554,6 +556,16 @@ func _build_test_range() -> void:
 		tg.global_position = Vector3(-19.0 + i * 2.0, 0, 25)
 		tg.was_hit.connect(func() -> void: score += 1)
 	_crate(Vector3(12, 3.5, 0.5), Vector3(-15, 0, 22), wall)
+	# Lawn, grass, trees, more targets and the power station on the horizon,
+	# put where the sun stands so its steam lights up against it.
+	var dressing := RangeDressing.new()
+	if sun_light != null:
+		var flat := Vector3(sun_light.global_basis.z.x, 0.0, sun_light.global_basis.z.z).normalized()
+		dressing.station_at = flat * 260.0 + flat.cross(Vector3.UP) * 60.0
+	add_child(dressing)
+	dressing.target_hit.connect(func() -> void:
+		score += 1
+		hitmarker.mark(false, false))
 
 
 func _hud_label(layer: Node, size: int, pos: Vector2, box: Vector2, right := false) -> Label:
@@ -686,34 +698,41 @@ uniform sampler2D pip : filter_linear, repeat_disable;
 uniform vec2 centre = vec2(0.5);
 uniform float radius = 0.3;
 uniform vec2 flick = vec2(0.0);
+uniform float settle = 1.0;   // 0 the moment you scope in, 1 once the eye is behind the lens
 void fragment() {
 	float aspect = SCREEN_PIXEL_SIZE.y / SCREEN_PIXEL_SIZE.x;
 	vec2 d = (UV - centre) * vec2(aspect, 1.0);
 	float r = length(d);
-	float inside = 1.0 - smoothstep(radius * 0.97, radius, r);
+	// Coming up to the eyepiece the picture is a small bright disc in black;
+	// it opens to the full lens as the eye settles.
+	float rad = radius * mix(0.78, 1.0, settle);
+	float inside = 1.0 - smoothstep(rad * 0.97, rad, r);
 	// Through glass: a touch of colour fringing towards the rim of the lens.
-	vec2 q = d / (radius * 2.0) + 0.5;
-	vec2 fr = d / (radius * 2.0) * smoothstep(0.4, 1.0, r / radius) * 0.012;
+	vec2 q = d / (rad * 2.0) + 0.5;
+	vec2 fr = d / (rad * 2.0) * smoothstep(0.4, 1.0, r / rad) * 0.012;
 	vec3 c = vec3(texture(pip, q + fr).r, texture(pip, q).g, texture(pip, q - fr).b);
 	// Coated glass: a faint green-blue tint and a soft reflection across the lens.
 	c = mix(c, c * vec3(0.95, 1.0, 1.02), 0.6);
-	float sheen = smoothstep(0.35, 0.0, abs(dot(d / radius, normalize(vec2(1.0, -0.6))) - 0.45));
+	float sheen = smoothstep(0.35, 0.0, abs(dot(d / rad, normalize(vec2(1.0, -0.6))) - 0.45));
 	c += vec3(0.07, 0.08, 0.09) * sheen * 0.9;
 	// Very little dust on the glass: a few soft specks and a faint smudge.
-	vec2 g = d / radius * 34.0;
+	vec2 g = d / rad * 34.0;
 	vec2 cell = floor(g);
 	float h = fract(sin(dot(cell, vec2(127.1, 311.7))) * 43758.5453);
 	vec2 at = fract(sin(vec2(dot(cell, vec2(269.5, 183.3)), dot(cell, vec2(419.2, 371.9)))) * 43758.5453);
 	float speck = step(0.9, h) * smoothstep(0.14, 0.0, length(fract(g) - at));
-	float smudge = smoothstep(0.55, 0.0, length(d / radius - vec2(-0.35, 0.3))) * 0.5;
+	float smudge = smoothstep(0.55, 0.0, length(d / rad - vec2(-0.35, 0.3))) * 0.5;
 	c += vec3(0.24, 0.23, 0.21) * speck * 0.5 + vec3(0.06) * smudge * 0.6;
 		// Only a fast swing of the rifle throws a shadow across the lens.
-	c *= 1.0 - 0.95 * smoothstep(radius * 0.72, radius * 1.02, length(d + flick * radius));
-	c *= 1.0 - 0.3 * smoothstep(radius * 0.55, radius, r);
+	c *= 1.0 - 0.95 * smoothstep(rad * 0.72, rad * 1.02, length(d + flick * rad));
+	c *= 1.0 - 0.3 * smoothstep(rad * 0.55, rad, r);
 	float line = max(step(abs(d.x), 0.0008), step(abs(d.y), 0.0008));
-	float thick = max(step(abs(d.x), 0.003) * step(radius * 0.42, abs(d.y)), step(abs(d.y), 0.003) * step(radius * 0.42, abs(d.x)));
+	float thick = max(step(abs(d.x), 0.003) * step(rad * 0.42, abs(d.y)), step(abs(d.y), 0.003) * step(rad * 0.42, abs(d.x)));
 	c = mix(c, vec3(0.0), max(line, thick));
-	COLOR = vec4(c, inside);
+	c *= 1.0 - (1.0 - settle) * 0.7 * smoothstep(rad * 0.35, rad, r);
+	// Outside the lens: black, fading in as you scope in, like the scope's body
+	// filling your view.
+	COLOR = vec4(c * inside, max(inside, smoothstep(0.0, 0.6, settle)));
 }
 """
 	scope_mat = ShaderMaterial.new()
@@ -923,6 +942,10 @@ func _process(_dt: float) -> void:
 		var amount := smoothstep(2.2, 7.0, speed) * 0.85
 		var dir := Vector2(player.turn.x, -player.turn.y).normalized() if speed > 0.01 else Vector2.ZERO
 		scope_mat.set_shader_parameter("flick", dir * amount)
+		_scope_settle = move_toward(_scope_settle, 1.0, get_process_delta_time() / 0.32)
+		scope_mat.set_shader_parameter("settle", smoothstep(0.0, 1.0, _scope_settle))
+	else:
+		_scope_settle = 0.0
 	var gap := lerpf(8.0, 26.0, clampf(player.speed_h() / 8.0, 0.0, 1.0)) + player.kick * 200.0
 	var show: bool = player.ads_amt < 0.5 and player.sprint_amt < 0.5 and not player.w["melee"]
 	var offs := [Vector2(-1, -gap - 10), Vector2(-1, gap), Vector2(-gap - 10, -1), Vector2(gap, -1)]
@@ -2020,7 +2043,8 @@ func _run_flash_test() -> void:
 		await _wait(1.0)
 		await _save_view("sniper_fp")
 		player.ai = {"fire": true}
-		await _wait(0.05)
+		await _wait(0.02)
+		await _save_view("sniper_hip_kick")
 		player.ai = {}
 		await _wait(0.25)
 		await _save_view("sniper_smoke_a")
@@ -2033,7 +2057,9 @@ func _run_flash_test() -> void:
 		player.ai = {}
 		await _wait(0.6)
 		player.ai = {"ads": true}
-		await _wait(0.9)
+		await _wait(0.3)
+		await _save_view("sniper_ads_in")
+		await _wait(0.6)
 		await _save_view("sniper_ads")
 		player.ai = {}
 		main_menu.open(false)
@@ -2047,7 +2073,7 @@ func _run_flash_test() -> void:
 	if OS.get_cmdline_user_args().has("--sunshot"):
 		var to_sun := sun_light.global_basis.z
 		print("SUN elevation deg ", rad_to_deg(asin(to_sun.y)))
-		var offsets := [[0.0, 0.0, "sun_center"], [0.25, -0.12, "sun_side"], [0.5, -0.2, "sun_edge"]]
+		var offsets := [[0.0, -0.55, "sun_towers"], [0.0, 0.0, "sun_center"], [2.4, -0.35, "range_trees"], [3.6, -0.3, "range_course"]]
 		# And once with a wall between the eye and the sun, for the shafts.
 		var wall := MeshInstance3D.new()
 		var wm := BoxMesh.new()
@@ -2056,7 +2082,7 @@ func _run_flash_test() -> void:
 		add_child(wall)
 		wall.global_position = player.cam.global_position + to_sun * 5.0 + to_sun.cross(Vector3.UP).normalized() * 0.4
 		wall.look_at(player.cam.global_position, Vector3.UP)
-		offsets.append([0.12, -0.05, "sun_wall"])
+		wall.visible = false
 		for o: Array in offsets:
 			player.yaw = atan2(-to_sun.x, -to_sun.z) + float(o[0])
 			player.pitch = asin(to_sun.y) + float(o[1])

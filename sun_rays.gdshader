@@ -8,7 +8,7 @@ render_mode unshaded, blend_add, depth_test_disabled, depth_draw_never, cull_dis
 uniform sampler2D depth_tex : hint_depth_texture, filter_nearest;
 uniform vec2 sun_uv = vec2(-10.0);
 uniform float sun_on = 0.0;
-uniform float strength = 0.4;
+uniform float strength = 0.55;
 uniform vec3 tint : source_color = vec3(1.0, 0.86, 0.64);
 
 float sky(vec2 p) {

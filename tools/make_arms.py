@@ -127,14 +127,17 @@ class Hand:
         w, dr = self.wrist, self.dir
         d = np.minimum(d, seg(p, w + dr * 0.027, w + dr * 0.037, 0.0352))
         if self.watch:
-            # Round tactical watch on the back of the wrist: case, bezel ring and a
-            # crown, sitting on the strap where the pull tab would be.
-            c = w + dr * 0.034 + o * 0.0335
-            case = seg(p, c, c + o * 0.0075, 0.0118, 0.0)
-            bezel = seg(p, c + o * 0.0068, c + o * 0.0088, 0.0122, 0.0)
-            bezel = np.maximum(bezel, -seg(p, c + o * 0.006, c + o * 0.012, 0.0096, 0.0))
-            crown = seg(p, c + o * 0.004 + np.cross(dr, o) * 0.0115, c + o * 0.004 + np.cross(dr, o) * 0.0145, 0.0018)
+            # Round tactical watch worn on the inside of the wrist, the face turned
+            # in towards you as soldiers wear it: case, bezel ring and a crown,
+            # on a band right round the wrist.
+            c = w + dr * 0.034 - o * 0.0335
+            case = seg(p, c, c - o * 0.0075, 0.0118, 0.0)
+            bezel = seg(p, c - o * 0.0068, c - o * 0.0088, 0.0122, 0.0)
+            bezel = np.maximum(bezel, -seg(p, c - o * 0.006, c - o * 0.012, 0.0096, 0.0))
+            crown = seg(p, c - o * 0.004 + np.cross(dr, o) * 0.0115, c - o * 0.004 + np.cross(dr, o) * 0.0145, 0.0018)
             d = np.minimum(d, smin(case, np.minimum(bezel, crown), 0.0015))
+            tab = w + dr * 0.032 + o * 0.036
+            d = smin(d, seg(p, tab, tab + np.cross(dr, o) * 0.016, 0.0052), 0.002)
         else:
             tab = w + dr * 0.032 + o * 0.036
             d = smin(d, seg(p, tab - self.along * 0.0, tab + np.cross(dr, o) * 0.016, 0.0052), 0.002)
@@ -227,6 +230,7 @@ def left_hand():
     thumb = [v(-0.030, -0.070, -0.125), v(-0.021, -0.044, -0.150), v(0.004, -0.040, -0.1545), v(0.026, -0.043, -0.164)]
     hand = Hand(v(-0.052, -0.105, -0.105), v(-0.27, -0.30, 0.22), v(-1.0, 0.0, 0.0), fingers, thumb,
                 v(-0.035, -0.095, -0.125), v(-0.030, -0.070, -0.128), grip)
+    hand.watch = True
     build("left", hand, lambda p: np.minimum(np.minimum(grip(p), guard(p)), stop(p)))
 
 
@@ -241,6 +245,7 @@ def left_hold():
     thumb = [v(-0.034, -0.05, -0.15), v(-0.036, -0.022, -0.168), v(-0.0335, -0.002, -0.186), v(-0.031, 0.01, -0.206)]
     hand = Hand(v(-0.05, -0.085, -0.115), v(-0.27, -0.30, 0.22), v(0.0, -1.0, 0.0), fingers, thumb,
                 v(-0.034, -0.066, -0.145), v(-0.04, -0.05, -0.165), forend)
+    hand.watch = True
     build("left_hold", hand, forend)
 
 

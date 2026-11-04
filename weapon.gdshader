@@ -38,16 +38,18 @@ float dm_hash(vec2 p) {
 vec3 damatter(vec3 p, vec3 w, float t, out float glow, out float layer) {
 	// Forge lines: a coordinate along the weapon, bent by slow, smooth noise
 	// only, so the lines flow in long waves like folded steel.
-	float warp = tri(grime, p * 0.9, w).r * 3.2 + tri(grime, p * 2.4 + 1.7, w).r * 0.9;
-	float d = p.z * 70.0 + p.y * 25.0 + p.x * 12.0 + warp * 9.0;
+	// Animated: the folds slowly churn and the lines flow along the weapon.
+	vec3 drift = vec3(0.0, t * 0.012, t * 0.03);
+	float warp = tri(grime, p * 0.9 + drift, w).r * 3.2 + tri(grime, p * 2.4 + 1.7 - drift * 1.6, w).r * 0.9;
+	float d = p.z * 70.0 + p.y * 25.0 + p.x * 12.0 + warp * 9.0 - t * 0.55;
 	float f = fract(d);
 	// Each period: a bright steel line, a dark gap, a thin violet seam.
 	float steel_line = 1.0 - smoothstep(0.08, 0.16, abs(f - 0.3));
 	float seam = 1.0 - smoothstep(0.015, 0.04, abs(f - 0.72));
 	layer = steel_line;
 	// The dark matter between the lines: a slow nebula, almost black.
-	float n1 = tri(grime, p * 3.0 + vec3(t * 0.03, 0.0, t * 0.02), w).r;
-	float n2 = tri(grime, p * 7.0 - vec3(0.0, t * 0.025, t * 0.04), w).r;
+	float n1 = tri(grime, p * 3.0 + vec3(t * 0.08, 0.0, t * 0.06), w).r;
+	float n2 = tri(grime, p * 7.0 - vec3(0.0, t * 0.07, t * 0.1), w).r;
 	float cloud = smoothstep(0.5, 0.9, n1 * 0.6 + n2 * 0.5);
 	vec3 deep = mix(vec3(0.004, 0.003, 0.009), vec3(0.05, 0.012, 0.11), cloud);
 	deep = mix(deep, vec3(0.01, 0.04, 0.12), smoothstep(0.7, 0.95, n2) * 0.6);
@@ -57,7 +59,9 @@ vec3 damatter(vec3 p, vec3 w, float t, out float glow, out float layer) {
 	float dot_r = length(fract(g) - 0.5);
 	float star = step(0.993, dm_hash(cell)) * smoothstep(0.18, 0.02, dot_r) * (0.5 + 0.5 * sin(t * 3.0 + dm_hash(cell + 7.0) * 40.0));
 	vec3 steel = vec3(0.42, 0.42, 0.45) * (0.8 + 0.3 * n2);
-	glow = seam * (0.4 + 0.6 * cloud) + star;
+	// The violet seams pulse, a wave of light running down the weapon.
+	float pulse = 0.55 + 0.45 * sin(t * 2.2 - p.z * 9.0);
+	glow = seam * (0.4 + 0.6 * cloud) * (0.5 + pulse) + star;
 	return mix(deep, steel, steel_line);
 }
 
