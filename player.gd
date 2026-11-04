@@ -58,6 +58,7 @@ const POV_NAMES := ["Idle", "Walk", "Sprint", "Tactical Sprint", "Jump", "Fall",
 const POV_LABELS := ["Stehen", "Gehen", "Sprint", "Tac-Sprint", "Sprung", "Fallen", "Landung", "Slide", "Slide",
 		"Slide-Ende", "Geduckt", "Geduckt gehen", "Hinlegen", "Liegen", "Aufstehen", "Klettern"]
 const GUN_HIP := Vector3(0.07, -0.082, -0.33)
+const SNIPER_RIGHT := 0.045    # how far the sniper is shifted to the right at the hip
 # The poses below were first laid out around this older hip position, for a weapon
 # drawn at the world's field of view; _fit() moves them to the weapon's own, narrower one.
 const OLD_HIP := Vector3(0.1, -0.115, -0.5)
@@ -1707,6 +1708,10 @@ func _update_view(dt: float) -> void:
 	var rot: Vector3 = (p.gun_rot + hip_rot) * PI / 180.0
 	if w["two_handed"]:
 		rot += HIP_TURN
+	if w.has("bolt"):
+		# The big rifle and both hands sit a little further right in the picture
+		# (the aimed position is not touched).
+		pos.x += SNIPER_RIGHT
 	pos = pos.lerp(Vector3(0.0, -float(w["sight_y"]), float(w["ads_z"])), ads_amt)
 	rot = rot.lerp(Vector3.ZERO, ads_amt)
 	# Inspect runs in three steps while the key is held and backwards when it is let go:
