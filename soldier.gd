@@ -149,9 +149,20 @@ func setup(team_color: Color, enemy_look: bool) -> void:
 	var armband := _part(arm_parts[2], ring, band, Vector3(0, 0.03, 0))
 	armband.name = "Band"
 	# Pouches on the belt and a small pack on the back.
-	var pack := BoxMesh.new()
-	pack.size = Vector3(0.24, 0.28, 0.09)
-	_part(upper, pack, gear, Vector3(0, -0.12, 0.17))
+	# The kit that makes the silhouette: a full plate carrier on the torso and a
+	# battle belt with holster and pouches on the hips (tools/make_soldier.py).
+	var kit := StandardMaterial3D.new()
+	kit.albedo_color = Color(0.045, 0.045, 0.048) if enemy_look else Color(0.2, 0.19, 0.13)
+	kit.roughness = 0.88
+	kit.normal_enabled = true
+	kit.normal_texture = Assets.tex("denim_fabric_nor_gl.jpg")
+	kit.normal_scale = 1.2
+	kit.uv1_triplanar = true
+	kit.uv1_scale = Vector3.ONE * 7.0
+	_model(legs.torso, "soldier_vest.bin", kit)
+	_model(legs.pelvis, "soldier_belt.bin", kit)
+	# Sturdier legs than the player's own view model.
+	legs.scale = Vector3(1.12, 1.0, 1.12)
 	_solve_arms()
 
 
@@ -263,8 +274,9 @@ func animate(dt: float, speed: float, aiming: bool, crouched := false) -> void:
 	legs.update(dt, state, _phase, speed, 0.0, 0.0, 1.62)
 	# legs.gd leans the chest back for the player's own view; stand the bot upright.
 	var hip := legs.pelvis.position
-	legs._span(legs.torso, hip + Vector3(0, 0.02, 0.0), hip + Vector3(0, 0.4, -0.02))
-	upper.position = PIVOT + Vector3(0, hip.y - 0.975, 0)
+	# A slight forward lean, weight over the toes, like an operator at the ready.
+	legs._span(legs.torso, hip + Vector3(0, 0.02, 0.0), hip + Vector3(0, 0.4, -0.07))
+	upper.position = PIVOT + Vector3(0, hip.y - 0.975, -0.06)
 	# The upper body follows the aim, sways a little with each step and breathes.
 	var walk_bob := sin(_phase * 2.0) * 0.012 * clampf(speed / 3.0, 0.0, 1.0)
 	_pitch = lerpf(_pitch, aim_pitch, 1.0 - exp(-10.0 * dt))

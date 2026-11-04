@@ -182,6 +182,47 @@ def glove(p):
     return cuff
 
 
+def vest(p):
+    """A full plate carrier, in the frame of the torso model (legs.gd): front and
+    back plate bags, cummerbund round the sides, padded shoulder straps, three
+    rifle magazine pouches and an admin pouch on the front, a radio on the left,
+    a hydration carrier on the back, and rows of webbing."""
+    d = box(p, v(0, 0.03, -0.135), (0.15, 0.165, 0.04), 0, 0.03)
+    d = union(d, box(p, v(0, 0.03, 0.115), (0.15, 0.165, 0.038), 0, 0.03))
+    for sx in (-1.0, 1.0):
+        d = smin(d, box(p, v(sx * 0.165, -0.06, -0.01), (0.035, 0.075, 0.13), 0, 0.03), 0.02)
+        strap = seg(p, v(sx * 0.1, 0.19, -0.13), v(sx * 0.11, 0.25, -0.01), 0.03)
+        strap = smin(strap, seg(p, v(sx * 0.11, 0.25, -0.01), v(sx * 0.1, 0.19, 0.11), 0.03), 0.02)
+        d = smin(d, strap, 0.015)
+    # Webbing rows on the front bag.
+    for yy in (0.12, 0.155):
+        d = union(d, box(p, v(0, yy, -0.178), (0.13, 0.009, 0.006), 0, 0.003))
+    # Magazine pouches with flaps, and an admin pouch above them.
+    for x in (-0.085, 0.0, 0.085):
+        pouch = box(p, v(x, -0.07, -0.19), (0.038, 0.07, 0.03), 0, 0.012)
+        flap = box(p, v(x, -0.005, -0.196), (0.04, 0.02, 0.03), 0, 0.01)
+        d = union(d, smin(pouch, flap, 0.006))
+    d = union(d, box(p, v(0, 0.085, -0.19), (0.075, 0.035, 0.022), 0, 0.012))
+    # Radio on the left side with an antenna.
+    d = union(d, box(p, v(-0.19, 0.05, 0.03), (0.025, 0.06, 0.035), 0, 0.01))
+    d = union(d, seg(p, v(-0.2, 0.11, 0.05), v(-0.21, 0.32, 0.07), 0.004))
+    # Hydration carrier on the back.
+    d = union(d, box(p, v(0, 0.0, 0.18), (0.11, 0.17, 0.035), 0, 0.03))
+    return d
+
+
+def belt(p):
+    """Battle belt in the pelvis frame: the belt round the hips, a pistol holster
+    on the right thigh, a dump pouch and two pistol magazine pouches."""
+    ring = ellipsoid(p, v(0, 0.0, 0.0), (0.148, 0.04, 0.118))
+    d = np.maximum(np.abs(ring) - 0.009, np.abs(p[:, 1]) - 0.026)
+    d = union(d, box(p, v(0.165, -0.08, 0.0), (0.025, 0.1, 0.045), 0, 0.014))
+    d = union(d, box(p, v(-0.13, -0.035, 0.07), (0.035, 0.045, 0.03), 0, 0.014))
+    for x in (-0.07, -0.025):
+        d = union(d, box(p, v(x, -0.02, -0.15), (0.02, 0.04, 0.015), 0, 0.006))
+    return d
+
+
 def build(name, parts, lo, hi, step, keep):
     print(name)
     whole = lambda q: union(*[fn(q) for _, fn in parts])
@@ -198,6 +239,8 @@ if __name__ == "__main__":
     build("soldier_goggles", [(3, goggles)], (-0.11, -0.02, -0.12), (0.11, 0.06, 0.12), 0.0012, 0.2)
     build("soldier_eyes", [(7, head_eyes)], (-0.05, 0.0, -0.1), (0.05, 0.032, -0.06), 0.0014, 0.4)
     build("soldier_helmet", [(3, helmet)], (-0.12, -0.03, -0.13), (0.12, 0.15, 0.13), 0.0018, 0.1)
+    build("soldier_vest", [(3, vest)], (-0.26, -0.18, -0.25), (0.26, 0.36, 0.25), 0.0025, 0.12)
+    build("soldier_belt", [(3, belt)], (-0.25, -0.2, -0.2), (0.25, 0.06, 0.2), 0.0022, 0.15)
     build("soldier_shoulders", [(0, shoulders)], (-0.29, -0.13, -0.13), (0.29, 0.14, 0.13), 0.0022, 0.12)
     build("soldier_hand", [(1, hand)], (-0.05, -0.06, -0.06), (0.06, 0.08, 0.09), 0.0012, 0.25)
     build("soldier_upper_arm", [(0, upper_arm)], (-0.09, -0.24, -0.09), (0.09, 0.2, 0.09), 0.002, 0.1)
