@@ -251,8 +251,8 @@ def sn_bolt(p):
 
 
 def sn_glass(p):
-    return union(cyl(p, v(0, SCOPE_Y, -0.236), v(0, SCOPE_Y, -0.232), 0.0235),
-                 cyl(p, v(0, SCOPE_Y, 0.158), v(0, SCOPE_Y, 0.162), 0.017))
+    return union(cyl(p, v(0, SCOPE_Y, -0.242), v(0, SCOPE_Y, -0.234), 0.0249),
+                 cyl(p, v(0, SCOPE_Y, 0.156), v(0, SCOPE_Y, 0.166), 0.0174))
 
 
 def sn_mag(p):
@@ -565,8 +565,8 @@ def attachments():
     build_hi("sniper_barrel_long", [(0, sn_barrel_long)], b_lo, b_hi, 0.45)
     build_hi("sniper_barrel_sup", [(0, sn_barrel_sup)], b_lo, b_hi, 0.45)
     o_lo, o_hi = (-0.055, 0.035, -0.285), (0.06, 0.14, 0.19)
-    build_hi("sniper_optic_scope", [(0, sn_scope), (3, sn_glass)], o_lo, o_hi, 0.45)
-    build_hi("sniper_optic_compact", [(0, sn_scope_compact), (3, sn_glass_compact)], o_lo, o_hi, 0.45)
+    build_hi("sniper_optic_scope", [(3, sn_glass), (0, sn_scope)], o_lo, o_hi, 0.45)
+    build_hi("sniper_optic_compact", [(3, sn_glass_compact), (0, sn_scope_compact)], o_lo, o_hi, 0.45)
     build_hi("sniper_optic_dot", [(0, sn_dot)], o_lo, o_hi, 0.5)
 
 

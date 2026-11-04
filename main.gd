@@ -704,10 +704,8 @@ void fragment() {
 	vec2 d = (UV - centre) * vec2(aspect, 1.0);
 	float r = length(d);
 	// Coming up to the eyepiece you see the lens with a heavy black ring inside
-	// it; once the eye is right behind it the picture opens out to fill the
-	// view (the rifle and its camo disappear behind it) and the ring is gone.
-	float open_up = smoothstep(0.55, 1.0, settle);
-	float rad = mix(radius, max(radius, 0.78), open_up);
+	// it; once the eye is right behind it the ring is gone.
+	float rad = radius;
 	float inside = 1.0 - smoothstep(rad * 0.97, rad, r);
 	// Through glass: a touch of colour fringing towards the rim of the lens.
 	vec2 q = d / (rad * 2.0) + 0.5;
