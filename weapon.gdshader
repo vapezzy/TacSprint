@@ -16,6 +16,10 @@ uniform sampler2D scratch_n : hint_normal, filter_linear_mipmap_anisotropic, rep
 uniform sampler2D camo : source_color, filter_linear_mipmap_anisotropic, repeat_enable;
 // 0 black, 1 desert, 2 woodland, 3 gold, 4 arctic, 5 DAMATTER
 uniform int skin = 0;
+// Attachments (barrel, scope, muzzle, grip, magazine ...) wear the camo a shade darker.
+instance uniform float tone = 1.0;
+// How fast animated camos move.
+const float CAMO_SPEED = 0.3;
 // In first person everything behind clip_z (and below clip_y) is left out: the
 // shoulder stock sits beside your face and would only block the view.
 uniform float clip_z = 100.0;
@@ -177,15 +181,16 @@ void fragment() {
 	if (skin == 5 && zone < 1.5) {
 		float glow;
 		float layer;
-		albedo = damatter(op, w, TIME, glow, layer);
+		albedo = damatter(op, w, TIME * CAMO_SPEED, glow, layer);
 		albedo = mix(albedo, albedo * 0.7 + vec3(0.02), dust * 0.25);
 		metal = mix(0.5, 1.0, layer);
 		rough = mix(0.05, 0.1, fine);
-		glow_col = vec3(0.45, 0.2, 1.0) * glow * 0.9;
+		glow_col = vec3(0.45, 0.2, 1.0) * glow * 0.9 * mix(1.0, tone, 0.5);
 	}
 	// Camos are polished to a high gloss: a clear coat over the paint, dust and
 	// rubbed edges toned down.
 	if (skin >= 1 && zone < 1.5) {
+		albedo *= tone;
 		rough = min(rough, mix(0.1, 0.17, fine));
 		CLEARCOAT = 1.0;
 		CLEARCOAT_ROUGHNESS = 0.04;

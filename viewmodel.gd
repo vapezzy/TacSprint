@@ -99,6 +99,9 @@ func _init() -> void:
 	gun_part = _part("gun.bin", weapon_mat)
 	barrel_part = _part("sniper_barrel_standard.bin", weapon_mat)
 	optic_part = _part("sniper_optic_scope.bin", weapon_mat)
+	# Attachments wear the camo a shade darker than the weapon itself.
+	barrel_part.set_instance_shader_parameter("tone", 0.6)
+	optic_part.set_instance_shader_parameter("tone", 0.6)
 	# The reflex sight's dot: always drawn on top, so it sits on the window.
 	dot_part = MeshInstance3D.new()
 	var dot := SphereMesh.new()
@@ -153,6 +156,7 @@ func _init() -> void:
 	_parent = self
 	_parent = mag
 	mag_part = _part("mag.bin", weapon_mat)
+	mag_part.set_instance_shader_parameter("tone", 0.6)
 	_parent = left_arm
 	left_hand_part = _part("left_hand.bin", cloth)
 	left_sleeve_part = _part("left_sleeve.bin", cloth)
@@ -181,6 +185,7 @@ func set_weapon(w: Dictionary, plain_hold := false) -> void:
 	while extra_parts.size() < parts.size():
 		_parent = self
 		extra_parts.append(_part("", weapon_mat))
+		extra_parts.back().set_instance_shader_parameter("tone", 0.6)
 	for i in extra_parts.size():
 		var m: MeshInstance3D = extra_parts[i]
 		m.visible = i < parts.size()
