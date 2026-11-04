@@ -246,8 +246,20 @@ def sn_bolt(p):
     """Bolt with its handle: a separate part, so it can be worked after every shot."""
     handle = cyl(p, v(0.015, SN_Y, 0.065), v(0.05, SN_Y - 0.014, 0.078), 0.0042, 0.0005)
     body = cyl(p, v(0, SN_Y, -0.09), v(0, SN_Y, 0.075), 0.0138, 0.001)
+    for k in range(6):
+        a = k * np.pi / 3.0 + 0.3
+        c = v(np.cos(a) * 0.0138, SN_Y + np.sin(a) * 0.0138, 0.0)
+        body = cut(body, seg(p, c + v(0, 0, -0.07), c + v(0, 0, 0.045), 0.0021))
     shroud = cyl(p, v(0, SN_Y, 0.075), v(0, SN_Y, 0.098), 0.0155, 0.003)
-    return union(handle, ball(p, v(0.054, SN_Y - 0.016, 0.079), 0.0105), body, shroud)
+    for z in (0.082, 0.09):
+        shroud = cut(shroud, cyl(p, v(0, SN_Y, z - 0.0009), v(0, SN_Y, z + 0.0009), 0.0162))
+    knob_at = v(0.054, SN_Y - 0.016, 0.079)
+    knob = ball(p, knob_at, 0.0105)
+    axis = v(0.035, -0.014, 0.013)
+    axis = axis / np.linalg.norm(axis)
+    for off in (-0.0042, 0.0, 0.0042):
+        knob = cut(knob, torus(p, knob_at + axis * off, axis, 0.0108, 0.0011))
+    return union(handle, knob, body, shroud)
 
 
 def sn_glass(p):
@@ -457,9 +469,88 @@ def ax_stock_spacers(p):
     return box(p, v(0, -0.004, 0.2735), (0.0135, 0.05, 0.0025), 0, 0.0008)
 
 
+# --- AX-50 detail pass ---------------------------------------------------------------------
+# Screws, sockets, levers, pins, side rails, a serial plate and the scales on the
+# scope turrets: the small parts that make the big shapes read as a real rifle.
+
+def _screw_x(p, x, y, z, side, r=0.0029, h=0.0017):
+    """A slotted screw head on a side face (side = +1 right, -1 left)."""
+    head = cyl(p, v(x, y, z), v(x + side * h, y, z), r, 0.0005)
+    return cut(head, box(p, v(x + side * h, y, z), (0.0009, 0.0004, r * 1.3), 0, 0.0002))
+
+
+def _screw_z(p, x, y, z, side, r=0.0029, h=0.0017):
+    """A slotted screw head on a front (side = -1) or rear (+1) face."""
+    head = cyl(p, v(x, y, z), v(x, y, z + side * h), r, 0.0005)
+    return cut(head, box(p, v(x, y, z + side * h), (r * 1.3, 0.0004, 0.0009), 0, 0.0002))
+
+
+def ax_painted_details(p):
+    """Coated parts: short side rails and sling sockets on the handguard, the
+    safety's base and the pivot bosses of the stock hinge."""
+    parts = []
+    slot = np.abs(np.mod(p[:, 2] + 0.0025, 0.01) - 0.005) - 0.0024
+    for sx in (-1.0, 1.0):
+        rail = box(p, v(sx * 0.0272, SN_Y - 0.004, -0.43), (0.0032, 0.0095, 0.06), 0, 0.001)
+        rail = cut(rail, np.maximum(slot, 0.0288 - np.abs(p[:, 0])))
+        parts.append(rail)
+        boss = cyl(p, v(sx * 0.0245, SN_Y - 0.004, -0.205), v(sx * 0.0288, SN_Y - 0.004, -0.205), 0.0078, 0.001)
+        boss = cut(boss, cyl(p, v(sx * 0.0272, SN_Y - 0.004, -0.205), v(sx * 0.03, SN_Y - 0.004, -0.205), 0.0036))
+        parts.append(boss)
+        parts.append(cyl(p, v(sx * 0.0195, SN_Y - 0.012, 0.075), v(sx * 0.0225, SN_Y - 0.012, 0.075), 0.0075, 0.001))
+        parts.append(cyl(p, v(sx * 0.019, 0.0, 0.135), v(sx * 0.0235, 0.0, 0.135), 0.0072, 0.001))
+    return union(*parts)
+
+
+def ax_cuts(body, p):
+    """Recesses: a serial plate on the left of the receiver and a shallow
+    panel round the ejection port on the right."""
+    plate = np.maximum(np.maximum(np.abs(p[:, 1] - (SN_Y - 0.004)) - 0.0075, np.abs(p[:, 2] + 0.05) - 0.03), p[:, 0] + 0.012)
+    body = groove(body, plate, 0.0006)
+    panel = np.maximum(np.maximum(np.abs(p[:, 1] - (SN_Y + 0.004)) - 0.014, np.abs(p[:, 2] + 0.03) - 0.052), 0.012 - p[:, 0])
+    return groove(body, panel, 0.0005)
+
+
+def ax_steel_details(p):
+    parts = []
+    # Receiver screws, both sides: a lower row under the port and a short upper row.
+    for sx in (-1.0, 1.0):
+        for z in (-0.15, -0.115, -0.08, -0.045, -0.01, 0.025, 0.06):
+            if sx > 0 and -0.082 < z < 0.016:
+                continue
+            parts.append(_screw_x(p, sx * 0.0195, SN_Y - 0.0115, z, sx))
+        for z in (-0.15, -0.115, 0.045, 0.078):
+            parts.append(_screw_x(p, sx * 0.0195, SN_Y + 0.0165, z, sx))
+        # Handguard side screws.
+        for z in (-0.175, -0.508):
+            for dy in (-0.017, 0.017):
+                parts.append(_screw_x(p, sx * 0.0245, SN_Y - 0.004 + dy, z, sx, 0.0026))
+    # Screws round the handguard's end cap, on its front face.
+    for k in range(8):
+        a = k * np.pi / 4.0 + 0.2
+        parts.append(_screw_z(p, np.cos(a) * 0.0198, SN_Y - 0.002 + np.sin(a) * 0.0198, -0.5285, -1, 0.0023))
+    # Safety selector: a spindle with a thumb piece, on the right.
+    parts.append(cyl(p, v(0.0225, SN_Y - 0.012, 0.075), v(0.0275, SN_Y - 0.012, 0.075), 0.0052, 0.001))
+    parts.append(box(p, v(0.0278, SN_Y - 0.006, 0.089), (0.0026, 0.0048, 0.0125), 0, 0.001))
+    # Magazine release on the left of the well, a button in a collar.
+    parts.append(cyl(p, v(-0.0213, -0.036, MAG_Z - 0.04), v(-0.0262, -0.036, MAG_Z - 0.04), 0.0054, 0.001))
+    # Hinge pins through the stock's hinge block, with heads on both sides.
+    parts.append(cyl(p, v(-0.0245, 0.0, 0.135), v(0.0245, 0.0, 0.135), 0.0042, 0.0008))
+    for sx in (-1.0, 1.0):
+        parts.append(cyl(p, v(sx * 0.0235, 0.0, 0.135), v(sx * 0.0262, 0.0, 0.135), 0.0058, 0.001))
+    # Screws on the recoil pad's rear face.
+    for y in (0.024, -0.034):
+        parts.append(_screw_z(p, 0.0, y, 0.2985, 1, 0.0034, 0.002))
+    # A ring in front of the handguard where the barrel leaves it.
+    parts.append(cyl(p, v(0, SN_Y, -0.548), v(0, SN_Y, -0.537), 0.0176, 0.0018))
+    return union(*parts)
+
+
+
 def sn_painted(p):
     """Receiver, chassis, handguard, rail, bipod and stock frame (barrel and optic are separate)."""
-    body = union(ax_receiver(p), ax_handguard(p), ax_rail(p), ax_bipod(p), ax_stock_frame(p))
+    body = union(ax_receiver(p), ax_handguard(p), ax_rail(p), ax_bipod(p), ax_stock_frame(p), ax_painted_details(p))
+    body = ax_cuts(body, p)
     return cut(body, box(p, v(0, -0.06, MAG_Z), (0.0158, 0.04, 0.0615), 0, 0.001))
 
 
@@ -468,7 +559,8 @@ def sn_stock(p):
 
 
 def sn_steel(p):
-    return union(trigger(p), box(p, v(0, -0.05, -0.008), (0.004, 0.012, 0.003), 12.0, 0.001), ax_stock_spacers(p))
+    return union(trigger(p), box(p, v(0, -0.05, -0.008), (0.004, 0.012, 0.003), 12.0, 0.001), ax_stock_spacers(p),
+                 ax_steel_details(p))
 
 
 def _brake(p, z, half_w, half_h, half_l):
@@ -514,6 +606,17 @@ def sn_scope(p):
             else:
                 off = v(-(length - 0.008), np.cos(ang) * radius * 1.2, np.sin(ang) * radius * 1.2)
             cap = cut(cap, ball(p, a + off, 0.0016))
+        # Scale marks round the turret body, the way a real turret is graduated.
+        base = v(0, SCOPE_Y, 0.0)
+        helper = v(0, 0, 1.0) if abs(axis[2]) < 0.5 else v(1.0, 0, 0)
+        w = np.cross(axis, helper)
+        for k in range(30):
+            ang = k * 2.0 * np.pi / 30.0
+            dirv = helper * np.cos(ang) + w * np.sin(ang)
+            tick = 0.0075 if k % 5 == 0 else 0.0045
+            lo = base + axis * (length - 0.031) + dirv * radius
+            hi = base + axis * (length - 0.031 + tick) + dirv * radius
+            t = cut(t, seg(p, lo, hi, 0.0009))
         return union(t, cap)
     turrets = union(turret(v(0, 1, 0), 0.046, 0.0125), turret(v(1, 0, 0), 0.042, 0.0115), turret(v(-1, 0, 0), 0.038, 0.0135))
     d = union(bell, shade, eye, zoom, lever, saddle, turrets)
@@ -579,7 +682,6 @@ def build_hi(name, groups, lo, hi, keep):
 def sniper_set():
     box_lo, box_hi = (-0.045, -0.165, -0.66), (0.065, 0.075, 0.33)
     build_hi("sniper", [(0, sn_painted), (1, sn_polymer), (2, sn_steel)], box_lo, box_hi, 0.4)
-    build_hi("sniper_nogrip", [(0, sn_painted), (1, sn_polymer_plain), (2, sn_steel)], box_lo, box_hi, 0.4)
     build_hi("sniper_mag", [(0, sn_mag), (4, sn_mag_brass), (5, sn_mag_copper)], (-0.022, -0.12, -0.148), (0.022, -0.03, -0.008), 0.6)
     build_hi("sniper_bolt", [(2, sn_bolt)], (-0.02, -0.01, -0.1), (0.07, 0.04, 0.11), 0.6)
     attachments()

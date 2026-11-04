@@ -2080,14 +2080,14 @@ func _run_flash_test() -> void:
 		return
 	if OS.get_cmdline_user_args().has("--snipersnap"):
 		menu.set_weapon("primary", "sniper")
-		menu.set_skin(5)
+		menu.set_skin(_test_skin())
 		await _wait(1.2)
 		await _save_view("snap")
 		get_tree().quit(0)
 		return
 	if OS.get_cmdline_user_args().has("--snipershot"):
 		menu.set_weapon("primary", "sniper")
-		menu.set_skin(5)
+		menu.set_skin(_test_skin())
 		await _wait(1.0)
 		await _save_view("sniper_fp")
 		player.ai = {"fire": true}
@@ -2592,3 +2592,12 @@ func _sun_fx() -> void:
 	if sun_rays != null:
 		sun_rays.set_shader_parameter("sun_uv", at)
 		sun_rays.set_shader_parameter("sun_on", on)
+
+
+
+# --skin=N for the test views (default DAMATTER, 5).
+func _test_skin() -> int:
+	for a in OS.get_cmdline_user_args():
+		if a.begins_with("--skin="):
+			return int(a.substr(7))
+	return 5
