@@ -691,7 +691,22 @@ void fragment() {
 	vec2 d = (UV - centre) * vec2(aspect, 1.0);
 	float r = length(d);
 	float inside = 1.0 - smoothstep(radius * 0.97, radius, r);
-	vec3 c = texture(pip, d / (radius * 2.0) + 0.5).rgb;
+	// Through glass: a touch of colour fringing towards the rim of the lens.
+	vec2 q = d / (radius * 2.0) + 0.5;
+	vec2 fr = d / (radius * 2.0) * smoothstep(0.4, 1.0, r / radius) * 0.012;
+	vec3 c = vec3(texture(pip, q + fr).r, texture(pip, q).g, texture(pip, q - fr).b);
+	// Coated glass: a faint green-blue tint and a soft reflection across the lens.
+	c = mix(c, c * vec3(0.95, 1.0, 1.02), 0.6);
+	float sheen = smoothstep(0.35, 0.0, abs(dot(d / radius, normalize(vec2(1.0, -0.6))) - 0.45));
+	c += vec3(0.07, 0.08, 0.09) * sheen * 0.9;
+	// Very little dust on the glass: a few soft specks and a faint smudge.
+	vec2 g = d / radius * 34.0;
+	vec2 cell = floor(g);
+	float h = fract(sin(dot(cell, vec2(127.1, 311.7))) * 43758.5453);
+	vec2 at = fract(sin(vec2(dot(cell, vec2(269.5, 183.3)), dot(cell, vec2(419.2, 371.9)))) * 43758.5453);
+	float speck = step(0.9, h) * smoothstep(0.14, 0.0, length(fract(g) - at));
+	float smudge = smoothstep(0.55, 0.0, length(d / radius - vec2(-0.35, 0.3))) * 0.5;
+	c += vec3(0.24, 0.23, 0.21) * speck * 0.5 + vec3(0.06) * smudge * 0.6;
 		// Only a fast swing of the rifle throws a shadow across the lens.
 	c *= 1.0 - 0.95 * smoothstep(radius * 0.72, radius * 1.02, length(d + flick * radius));
 	c *= 1.0 - 0.3 * smoothstep(radius * 0.55, radius, r);
@@ -2001,8 +2016,17 @@ func effect_blast(kind: String, at: Vector3) -> void:
 func _run_flash_test() -> void:
 	if OS.get_cmdline_user_args().has("--snipershot"):
 		menu.set_weapon("primary", "sniper")
+		menu.set_skin(5)
 		await _wait(1.0)
 		await _save_view("sniper_fp")
+		player.ai = {"fire": true}
+		await _wait(0.05)
+		player.ai = {}
+		await _wait(0.25)
+		await _save_view("sniper_smoke_a")
+		await _wait(0.6)
+		await _save_view("sniper_smoke_b")
+		await _wait(1.5)
 		player.ai = {"inspect": true}
 		await _wait(1.6)
 		await _save_view("sniper_inspect")

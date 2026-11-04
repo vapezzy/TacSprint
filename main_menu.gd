@@ -540,7 +540,7 @@ func _weapons_list() -> Control:
 	var skins := HBoxContainer.new()
 	skins.add_theme_constant_override("separation", 8)
 	var skin_group := ButtonGroup.new()
-	var skin_names: Array = ["Standard", "Wüste", "Wald", "Gold", "Arktis"]
+	var skin_names: Array = ["Standard", "Wüste", "Wald", "Gold", "Arktis", "DAMATTER"]
 	for i in skin_names.size():
 		var sb := _entry(skin_names[i], Vector2(98, 44), 16, true)
 		sb.button_group = skin_group

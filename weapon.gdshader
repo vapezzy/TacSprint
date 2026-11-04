@@ -14,7 +14,7 @@ uniform sampler2D grime : filter_linear_mipmap_anisotropic, repeat_enable;
 uniform sampler2D scratch_d : filter_linear_mipmap_anisotropic, repeat_enable;
 uniform sampler2D scratch_n : hint_normal, filter_linear_mipmap_anisotropic, repeat_enable;
 uniform sampler2D camo : source_color, filter_linear_mipmap_anisotropic, repeat_enable;
-// 0 black, 1 desert, 2 woodland, 3 gold, 4 arctic
+// 0 black, 1 desert, 2 woodland, 3 gold, 4 arctic, 5 DAMATTER
 uniform int skin = 0;
 // In first person everything behind clip_z (and below clip_y) is left out: the
 // shoulder stock sits beside your face and would only block the view.
@@ -26,6 +26,40 @@ varying vec3 op;
 varying vec3 on;
 varying flat float zone;
 varying vec2 worn;
+
+// DAMATTER: Damascus steel folded with dark matter. Wavy forge layers of dark
+// and bright steel run along the weapon; deep in the dark layers a violet-blue
+// nebula drifts slowly and pin-point stars glint, and the bright layers glow
+// faintly at their edges. The coat is polished to a mirror.
+float dm_hash(vec2 p) {
+	return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453);
+}
+
+vec3 damatter(vec3 p, vec3 w, float t, out float glow, out float layer) {
+	// Forge lines: a coordinate along the weapon, bent by slow, smooth noise
+	// only, so the lines flow in long waves like folded steel.
+	float warp = tri(grime, p * 0.9, w).r * 3.2 + tri(grime, p * 2.4 + 1.7, w).r * 0.9;
+	float d = p.z * 70.0 + p.y * 25.0 + p.x * 12.0 + warp * 9.0;
+	float f = fract(d);
+	// Each period: a bright steel line, a dark gap, a thin violet seam.
+	float steel_line = 1.0 - smoothstep(0.08, 0.16, abs(f - 0.3));
+	float seam = 1.0 - smoothstep(0.015, 0.04, abs(f - 0.72));
+	layer = steel_line;
+	// The dark matter between the lines: a slow nebula, almost black.
+	float n1 = tri(grime, p * 3.0 + vec3(t * 0.03, 0.0, t * 0.02), w).r;
+	float n2 = tri(grime, p * 7.0 - vec3(0.0, t * 0.025, t * 0.04), w).r;
+	float cloud = smoothstep(0.5, 0.9, n1 * 0.6 + n2 * 0.5);
+	vec3 deep = mix(vec3(0.004, 0.003, 0.009), vec3(0.05, 0.012, 0.11), cloud);
+	deep = mix(deep, vec3(0.01, 0.04, 0.12), smoothstep(0.7, 0.95, n2) * 0.6);
+	// Stars: rare points that twinkle.
+	vec2 g = (p.zy + p.x * 0.3) * 420.0;
+	vec2 cell = floor(g);
+	float dot_r = length(fract(g) - 0.5);
+	float star = step(0.993, dm_hash(cell)) * smoothstep(0.18, 0.02, dot_r) * (0.5 + 0.5 * sin(t * 3.0 + dm_hash(cell + 7.0) * 40.0));
+	vec3 steel = vec3(0.42, 0.42, 0.45) * (0.8 + 0.3 * n2);
+	glow = seam * (0.4 + 0.6 * cloud) + star;
+	return mix(deep, steel, steel_line);
+}
 
 void vertex() {
 	op = VERTEX;
@@ -81,6 +115,7 @@ void fragment() {
 	float rough;
 	float metal = 0.0;
 	vec3 nn = n;
+	vec3 glow_col = vec3(0.0);
 	if (zone < 0.5) {
 		// Black phosphate over steel.
 		albedo = skinned(vec3(0.012, 0.012, 0.013) * mix(0.8, 1.3, big), op, w, big);
@@ -114,10 +149,11 @@ void fragment() {
 		metal = 1.0 - dust * 0.7;
 		nn = tri_normal(scratch_n, op * 7.0, n, w, 0.3);
 	} else if (zone < 3.5) {
-		// Dark glass (scope lenses).
-		albedo = vec3(0.004, 0.006, 0.01);
-		rough = 0.06;
-		metal = 0.0;
+		// Coated glass (scope lenses): almost black, a green-violet sheen at an angle.
+		float facing = abs(dot(n, normalize((inverse(VIEW_MATRIX * MODEL_MATRIX) * vec4(VIEW, 0.0)).xyz)));
+		albedo = mix(vec3(0.03, 0.06, 0.05), vec3(0.05, 0.02, 0.07), facing) * 0.6;
+		rough = 0.02;
+		metal = 0.5;
 	} else if (zone < 4.5) {
 		// Brass cartridge cases.
 		albedo = vec3(0.9, 0.62, 0.22) * mix(0.8, 1.0, mid);
@@ -134,7 +170,24 @@ void fragment() {
 		metal = max(metal, 0.95);
 		rough = min(rough, 0.3);
 	}
+	if (skin == 5 && zone < 1.5) {
+		float glow;
+		float layer;
+		albedo = damatter(op, w, TIME, glow, layer);
+		albedo = mix(albedo, albedo * 0.7 + vec3(0.02), dust * 0.25);
+		metal = mix(0.5, 1.0, layer);
+		rough = mix(0.05, 0.1, fine);
+		glow_col = vec3(0.45, 0.2, 1.0) * glow * 0.9;
+	}
+	// Camos are polished to a high gloss: a clear coat over the paint, dust and
+	// rubbed edges toned down.
+	if (skin >= 1 && zone < 1.5) {
+		rough = min(rough, mix(0.1, 0.17, fine));
+		CLEARCOAT = 1.0;
+		CLEARCOAT_ROUGHNESS = 0.04;
+	}
 	ALBEDO = albedo;
+	EMISSION = glow_col;
 	ROUGHNESS = rough;
 	METALLIC = metal;
 	SPECULAR = mix(0.24, 0.5, metal);

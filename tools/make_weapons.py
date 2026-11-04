@@ -522,8 +522,8 @@ def sn_scope(p):
         foot = box(p, v(0, 0.053, z), (0.0125, 0.0125, 0.009), 0, 0.002)
         ring = smin(ring, foot, 0.004)
         for sx in (-1.0, 1.0):
-            ring = union(ring, cyl(p, v(sx * 0.02, SCOPE_Y + 0.012, z), v(sx * 0.026, SCOPE_Y + 0.012, z), 0.0032, 0.0006))
-        ring = union(ring, cyl(p, v(0.013, 0.05, z), v(0.019, 0.05, z), 0.004, 0.0008))      # clamp nut
+            ring = union(ring, cyl(p, v(sx * 0.014, SCOPE_Y + 0.012, z), v(sx * 0.0215, SCOPE_Y + 0.012, z), 0.0032, 0.0006))
+        ring = union(ring, cyl(p, v(0.01, 0.05, z), v(0.017, 0.05, z), 0.004, 0.0008))       # clamp nut
         d = np.minimum(d, ring)
     d = cut(d, cyl(p, v(0, SCOPE_Y, -0.28), v(0, SCOPE_Y, -0.236), 0.025))
     return cut(d, cyl(p, v(0, SCOPE_Y, 0.162), v(0, SCOPE_Y, 0.18), 0.0175))

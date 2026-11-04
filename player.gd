@@ -150,6 +150,7 @@ var reload_style := 0         # sniper: 0 = right hand on the fore-end, 1 = cant
 var reload_empty := false     # this reload started on an empty magazine (the action is worked at the end)
 var heat := 0.0               # barrel heat: smoke keeps rising from the muzzle while it lasts
 var puffs: CPUParticles3D
+var blast: CPUParticles3D       # the big cloud a .50 throws out of its brake
 var laser_dot: MeshInstance3D
 var _sfx := {}
 var _reload_prev := 0.0
@@ -387,11 +388,41 @@ func _build_viewmodel() -> void:
 	puffs.color_ramp = thin
 	puffs.mesh = puff
 	add_child(puffs)
-	# Both smokes draw with their own shader: soft grey puffs facing the camera.
+	# The heavy rifle's blast: a burst of thick smoke, most of it thrown out
+	# sideways by the brake's ports, swelling and hanging in the air.
+	blast = CPUParticles3D.new()
+	blast.top_level = true
+	blast.emitting = false
+	blast.one_shot = true
+	blast.explosiveness = 0.9
+	blast.amount = 90
+	blast.lifetime = 2.2
+	blast.local_coords = false
+	blast.spread = 80.0
+	blast.gravity = Vector3(0, 0.3, 0)
+	blast.initial_velocity_min = 0.5
+	blast.initial_velocity_max = 2.6
+	blast.damping_min = 4.0
+	blast.damping_max = 7.0
+	blast.scale_amount_min = 1.4
+	blast.scale_amount_max = 2.8
+	var billow := Curve.new()
+	billow.max_value = 5.0
+	billow.add_point(Vector2(0.0, 0.5))
+	billow.add_point(Vector2(1.0, 4.2))
+	blast.scale_amount_curve = billow
+	var thick := Gradient.new()
+	thick.colors = PackedColorArray([Color(0.85, 0.84, 0.82, 0.0), Color(0.8, 0.79, 0.77, 0.17), Color(0.72, 0.72, 0.72, 0.0)])
+	thick.offsets = PackedFloat32Array([0.0, 0.08, 1.0])
+	blast.color_ramp = thick
+	blast.mesh = puff
+	add_child(blast)
+	# All smokes draw with their own shader: soft grey puffs facing the camera.
 	var smoke_mat := ShaderMaterial.new()
 	smoke_mat.shader = load("res://smoke.gdshader")
 	smoke.material_override = smoke_mat
 	puffs.material_override = smoke_mat
+	blast.material_override = smoke_mat
 	# Where the laser lands in the world.
 	laser_dot = MeshInstance3D.new()
 	laser_dot.top_level = true
@@ -1269,7 +1300,11 @@ func _fire() -> void:
 	if w["auto"]:
 		shake = minf(shake + 0.32, 1.0)
 	vmodel.hand_shot(float(w.get("kick", 1.0)) * minf(float(w["recoil"]), 2.0))
-	heat = minf(heat + (0.9 if w.has("bolt") else 0.12), 3.0)
+	heat = minf(heat + (1.6 if w.has("bolt") else 0.12), 3.0)
+	if w.has("bolt") and not w.get("suppressed", false):
+		blast.global_position = _apparent(w["muzzle"])
+		blast.direction = -cam.global_transform.basis.z
+		blast.restart()
 	var sfx := str(w.get("sfx", ""))
 	if sfx != "":
 		var level: float = {"sniper": 0.0, "ar": -2.0, "smg": -3.5, "pistol": -3.0}.get(sfx, -3.0)
