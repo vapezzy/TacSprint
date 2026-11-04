@@ -121,6 +121,9 @@ var ready_done := false        # _ready builds the game in steps behind the load
 var music: AudioStreamPlayer
 var _music_tween: Tween
 var post_mat: ShaderMaterial
+var sun_light: DirectionalLight3D
+var sun_rays: ShaderMaterial
+var _sun_clear := 0.0
 var lethal_icon: TextureRect
 var lethal_count: Label
 var tactical_icon: TextureRect
@@ -366,6 +369,17 @@ func _build_post() -> void:
 	rect.material = mat
 	post_mat = mat
 	layer.add_child(rect)
+	# God rays and the sun disc: a quad that covers the view (sun_rays.gdshader).
+	var quad := MeshInstance3D.new()
+	var qm := QuadMesh.new()
+	qm.size = Vector2(2, 2)
+	quad.mesh = qm
+	sun_rays = ShaderMaterial.new()
+	sun_rays.shader = load("res://sun_rays.gdshader")
+	quad.material_override = sun_rays
+	quad.custom_aabb = AABB(Vector3(-1e5, -1e5, -1e5), Vector3(2e5, 2e5, 2e5))
+	quad.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	add_child(quad)
 
 
 func _block(size: Vector3, pos: Vector3, color: Color, rot := Vector3.ZERO) -> StaticBody3D:
@@ -459,7 +473,7 @@ func _build_environment() -> void:
 	env.glow_blend_mode = Environment.GLOW_BLEND_MODE_SOFTLIGHT
 	# Sunlight in the air: shafts of light between the containers, haze in the distance.
 	env.volumetric_fog_enabled = true
-	env.volumetric_fog_density = 0.006
+	env.volumetric_fog_density = 0.011
 	env.volumetric_fog_albedo = Color(0.9, 0.9, 0.88)
 	env.volumetric_fog_anisotropy = 0.65
 	env.volumetric_fog_length = 70.0
@@ -486,7 +500,8 @@ func _build_environment() -> void:
 	sun.light_energy = SUN_ENERGY
 	sun.light_color = Color(1.0, 0.96, 0.9)
 	sun.light_angular_distance = 0.7
-	sun.light_volumetric_fog_energy = 1.4
+	sun.light_volumetric_fog_energy = 2.4
+	sun_light = sun
 	sun.directional_shadow_max_distance = 90.0
 	sun.shadow_blur = 1.3
 	add_child(sun)
@@ -1984,6 +1999,26 @@ func effect_blast(kind: String, at: Vector3) -> void:
 
 
 func _run_flash_test() -> void:
+	if OS.get_cmdline_user_args().has("--sunshot"):
+		var to_sun := sun_light.global_basis.z
+		print("SUN elevation deg ", rad_to_deg(asin(to_sun.y)))
+		var offsets := [[0.0, 0.0, "sun_center"], [0.25, -0.12, "sun_side"], [0.5, -0.2, "sun_edge"]]
+		# And once with a wall between the eye and the sun, for the shafts.
+		var wall := MeshInstance3D.new()
+		var wm := BoxMesh.new()
+		wm.size = Vector3(1.2, 6.0, 0.3)
+		wall.mesh = wm
+		add_child(wall)
+		wall.global_position = player.cam.global_position + to_sun * 5.0 + to_sun.cross(Vector3.UP).normalized() * 0.4
+		wall.look_at(player.cam.global_position, Vector3.UP)
+		offsets.append([0.12, -0.05, "sun_wall"])
+		for o: Array in offsets:
+			player.yaw = atan2(-to_sun.x, -to_sun.z) + float(o[0])
+			player.pitch = asin(to_sun.y) + float(o[1])
+			await _wait(0.4)
+			await _save_view(o[2])
+		get_tree().quit(0)
+		return
 	if OS.get_cmdline_user_args().has("--menushot"):
 		hud.visible = false
 		main_menu.open()
@@ -2332,6 +2367,7 @@ func _motion_blur() -> void:
 	var lost := clampf(1.0 - player.health / full, 0.0, 1.0)
 	post_mat.set_shader_parameter("hurt", smoothstep(0.3, 0.9, lost) if player.health > 0.0 and not main_menu.is_open else 0.0)
 	post_mat.set_shader_parameter("stim", player.stim_flash)
+	_sun_fx()
 
 
 
@@ -2390,3 +2426,35 @@ func _stim_shots() -> void:
 			await get_tree().process_frame
 		await _save_view("stim_%02d" % int(k * 100))
 	print("STIMSHOT health=", player.health, " max=", player.max_health())
+
+
+
+# Tells the sun shaders where the sun is on screen, and how much of it can be
+# seen: three rays towards it from the eye, through anything that is in the way.
+func _sun_fx() -> void:
+	var cam := get_viewport().get_camera_3d()
+	var on := 0.0
+	var at := Vector2(-10, -10)
+	var clear := 0.0
+	if sun_light != null and cam != null and not main_menu.is_open:
+		var to_sun := sun_light.global_basis.z
+		var far := cam.global_position + to_sun * 800.0
+		if not cam.is_position_behind(far):
+			at = cam.unproject_position(far) / get_viewport().get_visible_rect().size
+			on = smoothstep(0.3, 0.85, (-cam.global_basis.z).dot(to_sun))
+			if player.get("scoped"):
+				on = 0.0
+			var space := get_world_3d().direct_space_state
+			var side := to_sun.cross(Vector3.UP).normalized()
+			for o: Vector3 in [Vector3.ZERO, side * 6.0, -side * 6.0]:
+				var q := PhysicsRayQueryParameters3D.create(cam.global_position, cam.global_position + to_sun * 400.0 + o)
+				q.exclude = [player.get_rid()]
+				if space.intersect_ray(q).is_empty():
+					clear += 1.0 / 3.0
+	_sun_clear = lerpf(_sun_clear, clear, 0.35)
+	post_mat.set_shader_parameter("sun_uv", at)
+	post_mat.set_shader_parameter("sun_on", on)
+	post_mat.set_shader_parameter("sun_clear", _sun_clear)
+	if sun_rays != null:
+		sun_rays.set_shader_parameter("sun_uv", at)
+		sun_rays.set_shader_parameter("sun_on", on)

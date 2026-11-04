@@ -12,7 +12,10 @@ uniform float grain = 0.022;
 uniform float halation = 0.4;
 uniform float hurt = 0.0;          // 0 healthy .. 1 nearly dead: the edges darken and redden, colour drains
 uniform float stim = 0.0;          // a stim just went in: a cold flash from the edges, colours pop
-uniform vec2 blur = vec2(0.0);    // motion blur: screen movement per frame, in UV
+uniform vec2 blur = vec2(0.0);
+uniform vec2 sun_uv = vec2(-10.0);   // where the sun is on screen (may be a little off it)
+uniform float sun_on = 0.0;          // 0 when the sun is behind the view or a menu is open
+uniform float sun_clear = 0.0;       // how much of the sun is not hidden (0-1)    // motion blur: screen movement per frame, in UV
 
 void fragment() {
 	vec2 uv = SCREEN_UV;
@@ -49,6 +52,36 @@ void fragment() {
 	}
 	wide /= 8.0;
 	c += max(wide - vec3(0.8), vec3(0.0)) * vec3(1.0, 0.55, 0.3) * halation;
+
+	// The sun's lens effects: glow, streak, halo and ghosts (the god rays and the
+	// disc come from sun_rays.gdshader). sun_clear says how much of the sun is
+	// not hidden behind something (main.gd casts rays to find out).
+	if (sun_on > 0.001) {
+		float aspect = px.y / px.x;
+		float onscreen = 1.0 - smoothstep(0.0, 0.25, max(max(-sun_uv.x, sun_uv.x - 1.0), max(-sun_uv.y, sun_uv.y - 1.0)));
+		float power = sun_on * onscreen;
+		float clear = sun_clear;
+		// Glow and the horizontal streak, only when the disc is clear.
+		vec2 d = (uv - sun_uv) * vec2(aspect, 1.0);
+		float dist = length(d);
+		float flare = power * clear;
+		c += vec3(1.0, 0.9, 0.72) * exp(-dist * dist * 90.0) * 0.4 * flare;
+		c += vec3(1.0, 0.82, 0.6) * exp(-abs(d.y) * 260.0) * exp(-abs(d.x) * 3.5) * 0.35 * flare;
+		// A faint rainbow halo round the sun.
+		float ring = exp(-pow((dist - 0.22) * 55.0, 2.0));
+		c += vec3(0.9 + 0.1 * sin(dist * 90.0), 0.7, 0.55 + 0.3 * cos(dist * 70.0)) * ring * 0.06 * flare;
+		// Ghosts: soft discs on the line from the sun through the middle of the picture.
+		vec2 axis = vec2(0.5) - sun_uv;
+		for (int i = 0; i < 5; i++) {
+			float t = 0.45 + float(i) * 0.38;
+			float radius = 0.025 + 0.018 * float((i * 3) % 4);
+			vec2 g = sun_uv + axis * t;
+			float gd = length((uv - g) * vec2(aspect, 1.0));
+			float disc = smoothstep(radius, radius * 0.7, gd);
+			vec3 tint = i % 3 == 0 ? vec3(0.4, 0.7, 1.0) : (i % 3 == 1 ? vec3(1.0, 0.6, 0.3) : vec3(0.5, 1.0, 0.6));
+			c += tint * disc * 0.07 * flare;
+		}
+	}
 
 	c *= 1.0 - vignette * smoothstep(0.12, 0.55, r2);
 
