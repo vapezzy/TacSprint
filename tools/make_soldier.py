@@ -58,6 +58,40 @@ def head_eyes(p):
     return np.minimum(ball(p, v(-0.031, 0.0155, -0.079), 0.0115), ball(p, v(0.031, 0.0155, -0.079), 0.0115))
 
 
+def head_masked(p):
+    """The head under a balaclava: the same skull, jaw and neck, but the cloth
+    smooths everything over - only a soft nose, a hint of the chin, and loose
+    folds round the neck."""
+    skull = ellipsoid(p, v(0, 0.03, 0.012), (0.081, 0.092, 0.099))
+    jaw = ellipsoid(p, v(0, -0.045, -0.02), (0.066, 0.049, 0.073))
+    d = smin(skull, jaw, 0.035)
+    d = smin(d, ball(p, v(0, -0.084, -0.066), 0.024), 0.025)
+    d = smin(d, seg(p, v(0, 0.015, -0.092), v(0, -0.014, -0.099), 0.008, 0.012), 0.03)
+    d = smin(d, seg(p, v(0, -0.06, 0.02), v(0, -0.15, 0.03), 0.062, 0.068), 0.035)
+    y = p[:, 1]
+    ang = np.arctan2(p[:, 0], p[:, 2])
+    neck = np.clip((-y - 0.07) / 0.05, 0, 1)
+    return d - 0.0028 * neck * np.sin(2 * np.pi * y / 0.03 + 2.5 * np.sin(3 * ang))
+
+
+def goggles(p):
+    """Wrap-around ballistic goggles: a curved lens across the eyes, a padded
+    frame round it and a strap going round the back of the head."""
+    band = ellipsoid(p, v(0, 0.018, 0.006), (0.09, 0.101, 0.106))
+    shell = np.abs(band) - 0.0045
+    y = p[:, 1]
+    z = p[:, 2]
+    lens = np.maximum(shell, np.abs(y - 0.017) - 0.017)
+    lens = np.maximum(lens, z + 0.045)
+    frame = np.abs(band - 0.002) - 0.006
+    frame = np.maximum(frame, np.abs(np.abs(y - 0.017) - 0.018) - 0.003)
+    frame = np.maximum(frame, z + 0.03)
+    strap = np.abs(ellipsoid(p, v(0, 0.018, 0.006), (0.087, 0.098, 0.103))) - 0.003
+    strap = np.maximum(strap, np.abs(y - 0.017) - 0.009)
+    strap = np.maximum(strap, -(z + 0.03))
+    return union(lens, frame, strap)
+
+
 # --- helmet ------------------------------------------------------------------
 
 def helmet(p):
@@ -123,6 +157,8 @@ def build(name, parts, lo, hi, step, keep):
 
 if __name__ == "__main__":
     build("soldier_head", [(6, head_skin)], (-0.1, -0.2, -0.13), (0.1, 0.14, 0.12), 0.0016, 0.25)
+    build("soldier_head_masked", [(0, head_masked)], (-0.1, -0.2, -0.13), (0.1, 0.14, 0.12), 0.0018, 0.15)
+    build("soldier_goggles", [(3, goggles)], (-0.11, -0.02, -0.12), (0.11, 0.06, 0.12), 0.0012, 0.2)
     build("soldier_eyes", [(7, head_eyes)], (-0.05, 0.0, -0.1), (0.05, 0.032, -0.06), 0.0014, 0.4)
     build("soldier_helmet", [(3, helmet)], (-0.12, -0.03, -0.13), (0.12, 0.15, 0.13), 0.0018, 0.1)
     build("soldier_upper_arm", [(0, upper_arm)], (-0.09, -0.24, -0.09), (0.09, 0.2, 0.09), 0.002, 0.1)

@@ -91,21 +91,22 @@ func setup(team_color: Color, enemy_look: bool) -> void:
 	head = Node3D.new()
 	head.position = Vector3(0, 0.215, 0.0)
 	upper.add_child(head)
-	var face_mat := skin
-	if enemy_look:
-		face_mat = StandardMaterial3D.new()
-		face_mat.albedo_color = Color(0.035, 0.035, 0.035)
-		face_mat.roughness = 0.95
-		face_mat.normal_enabled = true
-		face_mat.normal_texture = Assets.tex("stretch_poplin_nor_gl.jpg")
-		face_mat.uv1_triplanar = true
-		face_mat.uv1_scale = Vector3.ONE * 12.0
-	_model(head, "soldier_head.bin", face_mat)
-	var eye := StandardMaterial3D.new()
-	eye.albedo_color = Color(0.08, 0.06, 0.05)
-	eye.roughness = 0.08
-	eye.metallic_specular = 0.9
-	_model(head, "soldier_eyes.bin", eye)
+	# Nobody shows a bare face: a balaclava over the sculpted head, and wrap-around
+	# ballistic glasses over the eyes, the way most operators wear it.
+	var face_mat := StandardMaterial3D.new()
+	face_mat.albedo_color = Color(0.035, 0.035, 0.035) if enemy_look else Color(0.1, 0.105, 0.075)
+	face_mat.roughness = 0.97
+	face_mat.normal_enabled = true
+	face_mat.normal_texture = Assets.tex("stretch_poplin_nor_gl.jpg")
+	face_mat.normal_scale = 1.4
+	face_mat.uv1_triplanar = true
+	face_mat.uv1_scale = Vector3.ONE * 14.0
+	_model(head, "soldier_head_masked.bin", face_mat)
+	var lens := StandardMaterial3D.new()
+	lens.albedo_color = Color(0.025, 0.028, 0.032)
+	lens.metallic = 0.85
+	lens.roughness = 0.08
+	_model(head, "soldier_goggles.bin", lens)
 	var shell := gear.duplicate() as StandardMaterial3D
 	shell.albedo_color = Color(0.06, 0.06, 0.065) if enemy_look else Color(0.3, 0.27, 0.19)
 	_model(head, "soldier_helmet.bin", shell)
