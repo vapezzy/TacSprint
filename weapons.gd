@@ -28,7 +28,7 @@ const ALL := {
 		"two_handed": true, "scope": false, "melee": false, "hip_rot": Vector3.ZERO, "flash": 1.6,
 	},
 	"sniper": {
-		"name": "FJ50", "kind": "Scharfschützengewehr", "damage": 120.0, "forward": 0.04, "scope_zoom": 0.13, "mesh": "sniper.bin", "nogrip_mesh": "sniper_nogrip.bin", "sfx": "sniper", "bolt": "sniper_bolt.bin", "mag": "sniper_mag.bin", "mag_size": 7,
+		"name": "FJ50", "kind": "Scharfschützengewehr", "damage": 120.0, "forward": 0.04, "scope_zoom": 0.13, "mesh": "sniper.bin", "nogrip_mesh": "sniper_nogrip.bin", "sfx": "sniper", "sway": 0.8, "bolt": "sniper_bolt.bin", "mag": "sniper_mag.bin", "mag_size": 7,
 		"interval": 1.25, "auto": false, "recoil": 3.4, "spread": 5.0, "reload": 2.8,
 		"ads_zoom": 0.6, "ads_time": 0.42, "sight_y": 0.078, "ads_z": -0.199,
 		"muzzle": Vector3(0, 0.016, -0.86), "port": Vector3(0.026, 0.02, -0.03),
@@ -56,12 +56,6 @@ const ALL := {
 # magnifications they can be set to.
 const ATTACHMENTS := {
 	"sniper": [
-		{"slot": "griff", "label": "GRIFF", "options": [
-			{"id": "vertikal", "name": "Vertikalgriff", "text": "Ruhiger im Anschlag, weniger Wackeln.",
-				"set": {}, "mul": {"sway": 0.8}},
-			{"id": "keiner", "name": "Kein Griff", "text": "Hand am Vorderschaft: etwas schneller im Anschlag, wackelt mehr.",
-				"set": {"plain_hold": true}, "mul": {"ads_time": 0.92, "sway": 1.2}},
-		]},
 		{"slot": "lauf", "label": "LAUF", "options": [
 			{"id": "standard", "name": "Standardlauf", "text": "Ausgewogen. Kopftreffer tötet, Körper braucht zwei.",
 				"set": {"barrel": "sniper_barrel_standard.bin", "muzzle": Vector3(0, 0.016, -0.86), "side_flash": true}, "mul": {}},

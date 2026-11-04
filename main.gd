@@ -1442,11 +1442,6 @@ func _weapon_shots() -> void:
 			await _wait(0.5)
 			await _save_view("w_" + id)
 			if id == "sniper":
-				menu.set_sniper_grip(false)
-				await _wait(0.4)
-				await _save_view("w_sniper_nogrip")
-				ok = ok and not player.sniper_grip
-				menu.set_sniper_grip(true)
 				await _wait(0.3)
 				var cycles_before := player.bolt_cycles
 				var shells_before := player.shells_ejected
@@ -2068,6 +2063,19 @@ func _run_flash_test() -> void:
 			player.ai = {}
 			await _wait(0.6)
 			print("RELOADTEST ", wid, " yy-cancel: reloading_now=", player.reloading > 0.0, " slot ", slot_before, "->", player.slot, " ammo=", player.ammo, " swap_t=", player.swap_t)
+		get_tree().quit(0)
+		return
+	if OS.get_cmdline_user_args().has("--hipshots"):
+		for wid: String in ["smg", "ar", "sniper"]:
+			menu.set_weapon("primary", wid)
+			await _wait(1.0)
+			await _save_view("hip_" + wid)
+		menu.set_weapon("primary", "smg")
+		player.ai = {"swap": true}
+		await _wait(0.1)
+		player.ai = {}
+		await _wait(1.4)
+		await _save_view("hip_pistol")
 		get_tree().quit(0)
 		return
 	if OS.get_cmdline_user_args().has("--snipersnap"):

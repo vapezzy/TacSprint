@@ -305,7 +305,8 @@ func _load() -> void:
 		if cfg.has_section(section):
 			for key: String in cfg.get_section_keys(section):
 				attach[weapon_id][key] = cfg.get_value(section, key)
-	attach["sniper"]["griff"] = "vertikal" if sniper_grip else "keiner"
+	attach["sniper"].erase("griff")
+	sniper_grip = true
 	lethal = str(cfg.get_value("class", "lethal", "granate"))
 	tactical = str(cfg.get_value("class", "tactical", "blend"))
 	for i in 3:
