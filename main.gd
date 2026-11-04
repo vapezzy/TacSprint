@@ -703,9 +703,11 @@ void fragment() {
 	float aspect = SCREEN_PIXEL_SIZE.y / SCREEN_PIXEL_SIZE.x;
 	vec2 d = (UV - centre) * vec2(aspect, 1.0);
 	float r = length(d);
-	// Coming up to the eyepiece the picture is a small bright disc in black;
-	// it opens to the full lens as the eye settles.
-	float rad = radius * mix(0.78, 1.0, settle);
+	// Coming up to the eyepiece you see the lens with a heavy black ring inside
+	// it; once the eye is right behind it the picture opens out to fill the
+	// view (the rifle and its camo disappear behind it) and the ring is gone.
+	float open_up = smoothstep(0.55, 1.0, settle);
+	float rad = mix(radius, max(radius, 0.78), open_up);
 	float inside = 1.0 - smoothstep(rad * 0.97, rad, r);
 	// Through glass: a touch of colour fringing towards the rim of the lens.
 	vec2 q = d / (rad * 2.0) + 0.5;
@@ -729,7 +731,8 @@ void fragment() {
 	float line = max(step(abs(d.x), 0.0008), step(abs(d.y), 0.0008));
 	float thick = max(step(abs(d.x), 0.003) * step(rad * 0.42, abs(d.y)), step(abs(d.y), 0.003) * step(rad * 0.42, abs(d.x)));
 	c = mix(c, vec3(0.0), max(line, thick));
-	c *= 1.0 - (1.0 - settle) * 0.7 * smoothstep(rad * 0.35, rad, r);
+	// The black ring inside the lens while the eye is still finding it.
+	c *= 1.0 - (1.0 - settle) * 0.97 * smoothstep(rad * 0.3, rad * 0.8, r);
 	COLOR = vec4(c, inside);
 }
 """
@@ -940,7 +943,7 @@ func _process(_dt: float) -> void:
 		var amount := smoothstep(2.2, 7.0, speed) * 0.85
 		var dir := Vector2(player.turn.x, -player.turn.y).normalized() if speed > 0.01 else Vector2.ZERO
 		scope_mat.set_shader_parameter("flick", dir * amount)
-		_scope_settle = move_toward(_scope_settle, 1.0, get_process_delta_time() / 0.32)
+		_scope_settle = move_toward(_scope_settle, 1.0, get_process_delta_time() / 0.45)
 		scope_mat.set_shader_parameter("settle", smoothstep(0.0, 1.0, _scope_settle))
 	else:
 		_scope_settle = 0.0
@@ -2089,7 +2092,7 @@ func _run_flash_test() -> void:
 		player.ai = {}
 		await _wait(0.6)
 		player.ai = {"ads": true}
-		await _wait(0.3)
+		await _wait(0.42)
 		await _save_view("sniper_ads_in")
 		await _wait(0.6)
 		await _save_view("sniper_ads")
