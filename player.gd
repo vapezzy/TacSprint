@@ -58,8 +58,8 @@ const POV_NAMES := ["Idle", "Walk", "Sprint", "Tactical Sprint", "Jump", "Fall",
 const POV_LABELS := ["Stehen", "Gehen", "Sprint", "Tac-Sprint", "Sprung", "Fallen", "Landung", "Slide", "Slide",
 		"Slide-Ende", "Geduckt", "Geduckt gehen", "Hinlegen", "Liegen", "Aufstehen", "Klettern"]
 const GUN_HIP := Vector3(0.07, -0.082, -0.33)
-const SNIPER_HIP := Vector3(-0.055, 0.058, 0.02)
-const SNIPER_HIP_ROT := Vector3(0.0, 0.4, -0.05)
+const SNIPER_HIP := Vector3(-0.058, 0.032, 0.04)
+const SNIPER_HIP_ROT := Vector3(0.05, 0.035, -0.06)
 # The poses below were first laid out around this older hip position, for a weapon
 # drawn at the world's field of view; _fit() moves them to the weapon's own, narrower one.
 const OLD_HIP := Vector3(0.1, -0.115, -0.5)
