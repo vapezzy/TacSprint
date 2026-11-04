@@ -2070,6 +2070,13 @@ func _run_flash_test() -> void:
 			print("RELOADTEST ", wid, " yy-cancel: reloading_now=", player.reloading > 0.0, " slot ", slot_before, "->", player.slot, " ammo=", player.ammo, " swap_t=", player.swap_t)
 		get_tree().quit(0)
 		return
+	if OS.get_cmdline_user_args().has("--snipersnap"):
+		menu.set_weapon("primary", "sniper")
+		menu.set_skin(5)
+		await _wait(1.2)
+		await _save_view("snap")
+		get_tree().quit(0)
+		return
 	if OS.get_cmdline_user_args().has("--snipershot"):
 		menu.set_weapon("primary", "sniper")
 		menu.set_skin(5)

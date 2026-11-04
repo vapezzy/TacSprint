@@ -60,9 +60,9 @@ void fragment() {
 		rough = mix(0.86, 0.98, wear);
 		rim = 0.35;
 	} else if (zone < 1.5) {
-		// Back of the glove: black stretch textile, greyed where it has rubbed.
-		albedo = vec3(0.013, 0.013, 0.014) * mix(0.8, 1.25, blotch);
-		albedo = mix(albedo, vec3(0.04, 0.04, 0.042), raised * 0.45 + fine * 0.08);
+		// Back of the glove: coyote-tan stretch textile, lighter where it has rubbed.
+		albedo = vec3(0.16, 0.12, 0.072) * mix(0.82, 1.18, blotch);
+		albedo = mix(albedo, vec3(0.26, 0.21, 0.14), raised * 0.45 + fine * 0.08);
 		albedo *= mix(1.0, 0.6, recess);
 		nn = tri_normal(weave_n, op * 21.0, n, w, 0.7);
 		rough = mix(0.8, 0.92, blotch);
