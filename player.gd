@@ -58,8 +58,6 @@ const POV_NAMES := ["Idle", "Walk", "Sprint", "Tactical Sprint", "Jump", "Fall",
 const POV_LABELS := ["Stehen", "Gehen", "Sprint", "Tac-Sprint", "Sprung", "Fallen", "Landung", "Slide", "Slide",
 		"Slide-Ende", "Geduckt", "Geduckt gehen", "Hinlegen", "Liegen", "Aufstehen", "Klettern"]
 const GUN_HIP := Vector3(0.07, -0.082, -0.33)
-const SNIPER_HIP := Vector3(-0.058, 0.032, 0.04)
-const SNIPER_HIP_ROT := Vector3(0.05, 0.035, -0.06)
 # The poses below were first laid out around this older hip position, for a weapon
 # drawn at the world's field of view; _fit() moves them to the weapon's own, narrower one.
 const OLD_HIP := Vector3(0.1, -0.115, -0.5)
@@ -1709,13 +1707,6 @@ func _update_view(dt: float) -> void:
 	var rot: Vector3 = (p.gun_rot + hip_rot) * PI / 180.0
 	if w["two_handed"]:
 		rot += HIP_TURN
-	if w.has("bolt"):
-		# The big rifle from the hip, the way MW holds it: higher and further
-		# right, pulled in so the scope's eyepiece sits large beside your eye, the
-		# barrel running away to the left, a slight cant; only the firing hand on
-		# the grip shows, the support hand is far out on the handguard.
-		pos += SNIPER_HIP
-		rot += SNIPER_HIP_ROT
 	pos = pos.lerp(Vector3(0.0, -float(w["sight_y"]), float(w["ads_z"])), ads_amt)
 	rot = rot.lerp(Vector3.ZERO, ads_amt)
 	# Inspect runs in three steps while the key is held and backwards when it is let go:
@@ -1852,9 +1843,6 @@ func _update_view(dt: float) -> void:
 	# A sniper rifle is too heavy to carry one-handed: both hands stay on it in a tactical sprint.
 	vmodel.left_throw = tactical_t
 	vmodel.left_item = tactical
-	# The bolt rifle's support hand goes far out on the handguard (out of the
-	# picture) while it is simply carried at the hip.
-	vmodel.left_forward = move_toward(vmodel.left_forward, 1.0 if (w.has("bolt") and ads_amt < 0.3 and inspect_p < 0.05 and reload_r <= 0.0 and tactical_t <= 0.0) else 0.0, dt / 0.2)
 	vmodel.pose_left(dt, 0.0 if w["scope"] else p.left_free, bob_t, inspect_p, drift, reload_r)
 	vmodel.pose_right_throw(lethal_t, lethal)
 	vmodel.hand_life(dt)

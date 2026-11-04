@@ -8,7 +8,7 @@ extends Node3D
 const Assets := preload("res://assets.gd")
 
 const SIGHT_Y := 0.066
-const MUZZLE := Vector3(0, 0.0, -0.47)
+const MUZZLE := Vector3(0, 0.0, -0.20)
 const PORT := Vector3(0.026, 0.017, -0.03)      # ejection port, on the right side
 # Centre of the support hand's grip, and the move that takes it from the
 # foregrip to the magazine.
@@ -29,7 +29,6 @@ const BOLT_AXIS := Vector3(0, 0.016, 0)
 # How the firing hand has to move to take hold of the bolt knob.
 # Throwing: what each hand holds, and how far through its throw it is.
 var left_throw := 0.0
-var left_forward := 0.0      # 1: the support hand out on the handguard (bolt rifle at the hip)
 var left_item := "blend"
 var right_items := {}
 var left_items := {}
@@ -695,8 +694,6 @@ func pose_left(dt: float, free: float, phase: float, inspect: float, wobble: Vec
 		var pump := Transform3D(b, Vector3(-0.15, -0.243 + 0.08 * s, -0.42 - 0.05 * s) - b * FIST)
 		goal = Transform3D.IDENTITY.interpolate_with(transform.affine_inverse() * pump, smoothstep(0.0, 1.0, free))
 
-	if left_forward > 0.0:
-		goal = goal.interpolate_with(Transform3D(Basis(Vector3.RIGHT, deg_to_rad(-6.0)), Vector3(-0.02, -0.24, -0.12)), smoothstep(0.0, 1.0, left_forward))
 	# A little smoothing keeps the arm from snapping when an action is broken off.
 	_arm = _arm.interpolate_with(goal, 1.0 - exp(-26.0 * dt))
 	left_arm.transform = _arm
