@@ -1999,6 +1999,27 @@ func effect_blast(kind: String, at: Vector3) -> void:
 
 
 func _run_flash_test() -> void:
+	if OS.get_cmdline_user_args().has("--snipershot"):
+		menu.set_weapon("primary", "sniper")
+		await _wait(1.0)
+		await _save_view("sniper_fp")
+		player.ai = {"inspect": true}
+		await _wait(1.6)
+		await _save_view("sniper_inspect")
+		player.ai = {}
+		await _wait(0.6)
+		player.ai = {"ads": true}
+		await _wait(0.9)
+		await _save_view("sniper_ads")
+		player.ai = {}
+		main_menu.open(false)
+		main_menu.show_tab(1)
+		main_menu.open_editor("sniper")
+		for k in 4:
+			await _wait(1.1)
+			await _save_view("sniper_editor_%d" % k)
+		get_tree().quit(0)
+		return
 	if OS.get_cmdline_user_args().has("--sunshot"):
 		var to_sun := sun_light.global_basis.z
 		print("SUN elevation deg ", rad_to_deg(asin(to_sun.y)))

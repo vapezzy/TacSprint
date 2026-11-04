@@ -13,7 +13,7 @@ Run: python tools/make_weapons.py
 import numpy as np
 
 from make_gun import SIGHT_Y, mag_well, rear_sight
-from sdf import (ball, box, cut, cyl, mesh, occlusion, save, seg, smin, split_by_zone, torus, union, v, wear, zones)
+from sdf import (ball, box, cut, cyl, groove, mesh, occlusion, save, seg, smin, split_by_zone, torus, union, v, wear, zones)
 
 STEP = 0.0008
 
@@ -354,6 +354,220 @@ def attachments():
     build("sniper_optic_scope", [(0, sn_scope), (3, sn_glass)], o_lo, o_hi, 0.3)
     build("sniper_optic_compact", [(0, sn_scope_compact), (3, sn_glass_compact)], o_lo, o_hi, 0.3)
     build("sniper_optic_dot", [(0, sn_dot)], o_lo, o_hi, 0.4)
+
+
+# --- sniper rifle, AX-50 style (replaces the parts above) --------------------------
+# A heavy .50 in a flat-sided aluminium chassis: square receiver with a full-
+# length rail, a long free-float handguard with M-LOK slots and a folded
+# bipod, a skeleton folding stock with an adjustable cheek riser, recoil pad
+# spacers and a monopod, a fluted barrel with a big two-port muzzle brake, and
+# a large tactical scope.
+
+SN_STEP = 0.0007
+
+
+def _mlok(d, p, z0, z1, x, y, half_h):
+    """Rows of M-LOK slots cut into a flat side at x (or the bottom when x is None)."""
+    for z in np.arange(z0, z1, 0.042):
+        if x is None:
+            d = cut(d, box(p, v(0, y, z), (0.0045, 0.006, 0.0135), 0, 0.0025))
+        else:
+            for dy in (-half_h, half_h):
+                d = cut(d, box(p, v(x, y + dy, z), (0.006, 0.0045, 0.0135), 0, 0.0025))
+    return d
+
+
+def ax_receiver(p):
+    rec = box(p, v(0, SN_Y + 0.002, -0.035), (0.0195, 0.0225, 0.135), 0, 0.0035)
+    # Ejection port on the right, relief channels along both sides.
+    rec = cut(rec, box(p, v(0.02, SN_Y + 0.005, -0.03), (0.007, 0.0095, 0.044), 0, 0.0015))
+    for sx in (-1.0, 1.0):
+        rec = groove(rec, np.maximum(np.abs(p[:, 1] - (SN_Y - 0.008)) - 0.0022, np.abs(p[:, 2] + 0.08) - 0.07), 0.0012)
+    shroud = cyl(p, v(0, SN_Y, 0.1), v(0, SN_Y, 0.124), 0.0165, 0.002)
+    lower = box(p, v(0, -0.014, -0.03), (0.0205, 0.0165, 0.122), 0, 0.003)
+    well = box(p, v(0, -0.034, MAG_Z), (0.021, 0.014, 0.07), 0, 0.003)
+    return union(rec, shroud, lower, well)
+
+
+def ax_handguard(p):
+    zc, half = -0.335, 0.187
+    hg = box(p, v(0, SN_Y - 0.004, zc), (0.0245, 0.0265, half), 0, 0.007)
+    # Bevelled top corners: the octagon-ish section of a modern chassis.
+    for sx in (-1.0, 1.0):
+        hg = cut(hg, box(p, v(sx * 0.031, SN_Y + 0.03, zc), (0.0125, 0.0125, half + 0.01), 0, 0.0015))
+    hg = cut(hg, cyl(p, v(0, SN_Y, zc - half - 0.01), v(0, SN_Y, zc + half + 0.01), 0.0175))
+    hg = _mlok(hg, p, -0.5, -0.17, 0.0245, SN_Y - 0.004, 0.009)
+    hg = _mlok(hg, p, -0.5, -0.17, -0.0245, SN_Y - 0.004, 0.009)
+    hg = _mlok(hg, p, -0.48, -0.2, None, SN_Y - 0.0305, 0)
+    cap = cyl(p, v(0, SN_Y - 0.002, -0.528), v(0, SN_Y - 0.002, -0.52), 0.0225, 0.002)
+    return union(hg, cap)
+
+
+def ax_rail(p):
+    rail = box(p, v(0, 0.0405, -0.205), (0.0105, 0.0045, 0.3), 0, 0.0008)
+    slot = np.abs(np.mod(p[:, 2] + 0.0025, 0.01) - 0.005) - 0.0024
+    rail = cut(rail, np.maximum(slot, 0.0418 - p[:, 1]))
+    # Rail screws every few slots.
+    for z in np.arange(-0.48, 0.08, 0.08):
+        rail = cut(rail, cyl(p, v(0, 0.046, z), v(0, 0.041, z), 0.0028))
+    return rail
+
+
+def ax_bipod(p):
+    """Bipod folded back along the handguard's underside."""
+    mount = box(p, v(0, -0.019, -0.49), (0.016, 0.007, 0.018), 0, 0.003)
+    yoke = box(p, v(0, -0.028, -0.49), (0.021, 0.006, 0.012), 0, 0.003)
+    d = union(mount, yoke)
+    for sx in (-1.0, 1.0):
+        leg = seg(p, v(sx * 0.018, -0.031, -0.485), v(sx * 0.018, -0.031, -0.27), 0.0058)
+        inner = seg(p, v(sx * 0.018, -0.031, -0.33), v(sx * 0.018, -0.031, -0.255), 0.0046)
+        foot = ball(p, v(sx * 0.018, -0.031, -0.252), 0.0075)
+        d = union(d, leg, inner, foot)
+        # Locking collars on each leg.
+        d = union(d, cyl(p, v(sx * 0.018, -0.031, -0.34), v(sx * 0.018, -0.031, -0.33), 0.0072, 0.001))
+    return d
+
+
+def ax_stock_frame(p):
+    hinge = box(p, v(0, 0.0, 0.135), (0.0195, 0.022, 0.012), 0, 0.003)
+    top = box(p, v(0, 0.02, 0.2), (0.0105, 0.009, 0.06), 0, 0.003)
+    low = box(p, v(0, -0.026, 0.198), (0.009, 0.0075, 0.068), -9.0, 0.003)
+    upright = box(p, v(0, -0.004, 0.262), (0.0125, 0.052, 0.009), 0, 0.003)
+    d = union(hinge, top, low, upright)
+    # Lightening window in the hinge block, cheek riser posts, the monopod.
+    d = cut(d, box(p, v(0, 0.0, 0.135), (0.03, 0.009, 0.005), 0, 0.002))
+    for z in (0.17, 0.235):
+        d = union(d, cyl(p, v(0, 0.028, z), v(0, 0.036, z), 0.0042, 0.0008))
+    d = union(d, cyl(p, v(0, -0.034, 0.245), v(0, -0.09, 0.245), 0.0058, 0.001))
+    d = union(d, cyl(p, v(0, -0.09, 0.245), v(0, -0.1, 0.245), 0.0085, 0.002))
+    d = union(d, cyl(p, v(0, -0.06, 0.245), v(0, -0.052, 0.245), 0.0095, 0.001))   # adjuster wheel
+    return d
+
+
+def ax_stock_soft(p):
+    """Cheek riser and the thick rubber recoil pad with its ribs."""
+    cheek = box(p, v(0, 0.044, 0.205), (0.0145, 0.0105, 0.056), 0, 0.007)
+    pad = box(p, v(0, -0.004, 0.287), (0.0175, 0.056, 0.0115), 0, 0.007)
+    for y in np.arange(-0.05, 0.05, 0.012):
+        pad = groove(pad, np.abs(p[:, 1] - y) - 0.0012, 0.0012)
+    return union(cheek, pad)
+
+
+def ax_stock_spacers(p):
+    return box(p, v(0, -0.004, 0.2735), (0.0135, 0.05, 0.0025), 0, 0.0008)
+
+
+def sn_painted(p):
+    """Receiver, chassis, handguard, rail, bipod and stock frame (barrel and optic are separate)."""
+    body = union(ax_receiver(p), ax_handguard(p), ax_rail(p), ax_bipod(p), ax_stock_frame(p))
+    return cut(body, box(p, v(0, -0.06, MAG_Z), (0.0158, 0.04, 0.0615), 0, 0.001))
+
+
+def sn_stock(p):
+    return ax_stock_soft(p)
+
+
+def sn_steel(p):
+    return union(trigger(p), box(p, v(0, -0.05, -0.008), (0.004, 0.012, 0.003), 12.0, 0.001), ax_stock_spacers(p))
+
+
+def _brake(p, z, half_w, half_h, half_l):
+    """The big .50 brake: a round body with two large side ports each side and
+    a flat front face."""
+    r = max(half_w, half_h) * 1.12
+    brake = cyl(p, v(0, SN_Y, z - half_l), v(0, SN_Y, z + half_l), r, 0.003)
+    for dz in (-0.45, 0.12):
+        brake = cut(brake, box(p, v(0, SN_Y, z + dz * half_l), (r * 1.6, r * 0.62, half_l * 0.22), 0, 0.002))
+    # Small gas ports on top.
+    for dz in (-0.75, 0.55):
+        brake = cut(brake, cyl(p, v(0, SN_Y + r * 1.3, z + dz * half_l), v(0, SN_Y, z + dz * half_l), 0.0028))
+    return cut(brake, cyl(p, v(0, SN_Y, z - half_l * 1.4), v(0, SN_Y, z - half_l * 0.6), 0.0072))
+
+
+def sn_scope(p):
+    """A big 5-25x56 tactical scope: objective bell with a sunshade, elevation and
+    windage turrets with knurled caps, a parallax knob on the left, a throw
+    lever on the zoom ring, and two rings with clamp screws."""
+    tube = cyl(p, v(0, SCOPE_Y, -0.11), v(0, SCOPE_Y, 0.1), 0.0165, 0.002)
+    bell = smin(cyl(p, v(0, SCOPE_Y, -0.245), v(0, SCOPE_Y, -0.13), 0.0295, 0.003), tube, 0.016)
+    shade = cyl(p, v(0, SCOPE_Y, -0.27), v(0, SCOPE_Y, -0.24), 0.0292, 0.002)
+    eye = smin(cyl(p, v(0, SCOPE_Y, 0.1), v(0, SCOPE_Y, 0.172), 0.0215, 0.003), tube, 0.008)
+    zoom = cyl(p, v(0, SCOPE_Y, 0.116), v(0, SCOPE_Y, 0.136), 0.0232, 0.0015)
+    for k in range(24):
+        a = k * np.pi / 12
+        zoom = cut(zoom, box(p, v(np.cos(a) * 0.0236, SCOPE_Y + np.sin(a) * 0.0236, 0.126), (0.0016, 0.0016, 0.012), 0, 0.0005))
+    lever = box(p, v(0.026, SCOPE_Y + 0.008, 0.126), (0.009, 0.004, 0.006), 0, 0.002)
+    saddle = box(p, v(0, SCOPE_Y, 0.0), (0.021, 0.021, 0.022), 0, 0.006)
+    def turret(axis, length, radius):
+        a = v(0, SCOPE_Y, 0.0)
+        b = a + axis * length
+        t = cyl(p, a, b, radius, 0.002)
+        cap = cyl(p, a + axis * (length - 0.016), b, radius * 1.18, 0.002)
+        n = 28
+        for k in range(n):
+            ang = k * 2 * np.pi / n
+            # Knurling: little grooves round the cap.
+            if axis[1] > 0.5:
+                off = v(np.cos(ang) * radius * 1.2, length - 0.008, np.sin(ang) * radius * 1.2)
+            elif axis[0] > 0.5:
+                off = v(length - 0.008, np.cos(ang) * radius * 1.2, np.sin(ang) * radius * 1.2)
+            else:
+                off = v(-(length - 0.008), np.cos(ang) * radius * 1.2, np.sin(ang) * radius * 1.2)
+            cap = cut(cap, ball(p, a + off, 0.0016))
+        return union(t, cap)
+    turrets = union(turret(v(0, 1, 0), 0.046, 0.0125), turret(v(1, 0, 0), 0.042, 0.0115), turret(v(-1, 0, 0), 0.038, 0.0135))
+    d = union(bell, shade, eye, zoom, lever, saddle, turrets)
+    for z in (-0.075, 0.062):
+        ring = cyl(p, v(0, SCOPE_Y, z - 0.009), v(0, SCOPE_Y, z + 0.009), 0.0205, 0.002)
+        foot = box(p, v(0, 0.053, z), (0.0125, 0.0125, 0.009), 0, 0.002)
+        ring = smin(ring, foot, 0.004)
+        for sx in (-1.0, 1.0):
+            ring = union(ring, cyl(p, v(sx * 0.02, SCOPE_Y + 0.012, z), v(sx * 0.026, SCOPE_Y + 0.012, z), 0.0032, 0.0006))
+        ring = union(ring, cyl(p, v(0.013, 0.05, z), v(0.019, 0.05, z), 0.004, 0.0008))      # clamp nut
+        d = np.minimum(d, ring)
+    d = cut(d, cyl(p, v(0, SCOPE_Y, -0.28), v(0, SCOPE_Y, -0.236), 0.025))
+    return cut(d, cyl(p, v(0, SCOPE_Y, 0.162), v(0, SCOPE_Y, 0.18), 0.0175))
+
+
+def sn_mag(p):
+    """A short five-round box magazine, as on the AX-50."""
+    body = box(p, v(0, -0.074, MAG_Z), (0.0152, 0.034, 0.06), 0, 0.003)
+    for sx in (-1.0, 1.0):
+        for z in (-0.03, 0.0, 0.03):
+            body = cut(body, box(p, v(sx * 0.0156, -0.08, MAG_Z + z), (0.0012, 0.018, 0.009), 0, 0.0008))
+    body = cut(body, box(p, v(0, -0.036, MAG_Z), (0.011, 0.012, 0.056), 0, 0.001))
+    return np.minimum(body, box(p, v(0, -0.11, MAG_Z), (0.0168, 0.004, 0.0625), 0, 0.002))
+
+
+def build_hi(name, groups, lo, hi, keep):
+    print(name)
+    field = lambda q: union(*[g(q) for _, g in groups])
+    verts, normals, faces = mesh(field, lo, hi, SN_STEP, keep)
+    ao = occlusion(field, verts, normals)
+    worn = wear(field, verts)
+    src, faces, zone = split_by_zone(faces, zones(verts[faces].mean(axis=1), groups))
+    save(name, verts[src], normals[src], faces, zone, ao[src], worn[src])
+
+
+def sniper_set():
+    box_lo, box_hi = (-0.045, -0.165, -0.66), (0.065, 0.075, 0.33)
+    build_hi("sniper", [(0, sn_painted), (1, sn_polymer), (2, sn_steel)], box_lo, box_hi, 0.4)
+    build_hi("sniper_nogrip", [(0, sn_painted), (1, sn_polymer_plain), (2, sn_steel)], box_lo, box_hi, 0.4)
+    build_hi("sniper_mag", [(0, sn_mag), (4, sn_mag_brass), (5, sn_mag_copper)], (-0.022, -0.12, -0.148), (0.022, -0.03, -0.008), 0.6)
+    build_hi("sniper_bolt", [(2, sn_bolt)], (-0.02, -0.01, -0.1), (0.07, 0.04, 0.11), 0.6)
+    attachments()
+
+
+def attachments():
+    """The sniper rifle's swappable barrels and optics."""
+    b_lo, b_hi = (-0.035, -0.02, -1.02), (0.035, 0.05, -0.15)
+    build_hi("sniper_barrel_standard", [(0, sn_barrel_standard)], b_lo, b_hi, 0.45)
+    build_hi("sniper_barrel_long", [(0, sn_barrel_long)], b_lo, b_hi, 0.45)
+    build_hi("sniper_barrel_sup", [(0, sn_barrel_sup)], b_lo, b_hi, 0.45)
+    o_lo, o_hi = (-0.055, 0.035, -0.285), (0.06, 0.14, 0.19)
+    build_hi("sniper_optic_scope", [(0, sn_scope), (3, sn_glass)], o_lo, o_hi, 0.45)
+    build_hi("sniper_optic_compact", [(0, sn_scope_compact), (3, sn_glass_compact)], o_lo, o_hi, 0.45)
+    build_hi("sniper_optic_dot", [(0, sn_dot)], o_lo, o_hi, 0.5)
 
 
 if __name__ == "__main__":
