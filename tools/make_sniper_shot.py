@@ -92,6 +92,14 @@ def dry_shot(suppressed):
     tone = np.sin(2 * np.pi * np.cumsum(f) / RATE) * attack * np.exp(-t * j(16))
     thump = band(noise(d), 60, 700, 2) * np.exp(-t * j(38)) * 1.6
     blast = high(sat(tone * 1.2 + thump, 1.8), 55, 2)
+    # The kick: what you feel in the chest. A drum-like hit dropping from ~130 Hz
+    # to ~52 Hz in a few tens of ms, a sub note that holds a little longer, and
+    # a short low-mid 'punch' around 100-200 Hz that small speakers can show.
+    kf = (j(130) - 52) * np.exp(-t * 45) + 52
+    kick = np.sin(2 * np.pi * np.cumsum(kf) / RATE) * (1 - np.exp(-t * 3000)) * np.exp(-t * j(15))
+    subn = np.sin(2 * np.pi * np.cumsum(kf * 0.0 + j(48, 0.03)) / RATE) * (1 - np.exp(-t * 400)) * np.exp(-t * j(10))
+    punch = band(noise(d), 90, 230, 2) * np.exp(-t * j(26)) * 2.2
+    kick = sat(kick * 1.0 + subn * 0.45 + punch, 1.3)
     # 4. body: short mid bark.
     body = band(noise(d), 280, 1600, 2) * np.exp(-t * j(42)) * 1.4
     body = sat(body, 2.0)
@@ -106,7 +114,9 @@ def dry_shot(suppressed):
         blast = low(blast, 380) * 0.45
         body = low(body, 900) * 0.35
         mech *= 2.6
-    mix = tr * 1.3 + crack * 1.9 + blast * 0.75 + body * 1.2 + mech * 0.06
+    if suppressed:
+        kick *= 0.12
+    mix = tr * 1.3 + crack * 1.9 + blast * 0.8 + kick * 0.7 + body * 1.2 + mech * 0.06
     return sat(high(mix, 38, 2), 1.15)
 
 
