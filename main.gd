@@ -31,8 +31,12 @@ const WIN_SCORE := 10
 # Set before reloading the scene to start straight into a mode ("arena" or "range").
 static var next_mode := ""
 
-const EXPOSURE := 0.8
-const SUN_ENERGY := 3.3
+const EXPOSURE := 1.0
+const SUN_ENERGY := 3.4
+const AGX_CONTRAST := 1.18
+const AUTO_EXPOSURE_GREY := 0.4
+const USE_SDFGI := true
+const SkyBuilder := preload("res://sky.gd")
 
 const GRID_SHADER := """
 shader_type spatial;
@@ -411,101 +415,113 @@ func _crate(size: Vector3, base: Vector3, color: Color) -> void:
 	_block(size, base + Vector3.UP * size.y / 2.0, color)
 
 
-# Finds the brightest spot of the sky panorama and returns the direction to it.
-func _sun_direction(pano: Image) -> Vector3:
-	var small: Image = pano.duplicate()
-	small.convert(Image.FORMAT_RGBF)
-	small.resize(256, 128, Image.INTERPOLATE_BILINEAR)
-	var best := -1.0
-	var at := Vector2i.ZERO
-	for y in 128:
-		for x in 256:
-			var c := small.get_pixel(x, y)
-			var l := c.r + c.g + c.b
-			if l > best:
-				best = l
-				at = Vector2i(x, y)
-	var theta := (at.x + 0.5) / 256.0 * TAU - PI
-	var phi := (at.y + 0.5) / 128.0 * PI
-	return Vector3(sin(phi) * sin(theta), cos(phi), -sin(phi) * cos(theta))
+# Sun direction: afternoon sun, 44 degrees up, from the north-east of the maps.
+const SUN_ELEVATION := 44.0
+const SUN_AZIMUTH := 34.45
 
 
 func _build_environment() -> void:
 	var env := Environment.new()
+	# Physical sky: atmosphere, sun disc and volumetric clouds (sky.gd / sky.gdshader).
 	var sky := Sky.new()
-	var pano := Assets.image("res://textures/sky_2k.hdr")
-	if pano != null:
-		var pano_mat := PanoramaSkyMaterial.new()
-		pano_mat.panorama = ImageTexture.create_from_image(pano)
-		sky.sky_material = pano_mat
-	else:
-		var sky_mat := ProceduralSkyMaterial.new()
-		sky_mat.sky_top_color = Color(0.3, 0.45, 0.7)
-		sky_mat.sky_horizon_color = Color(0.7, 0.75, 0.8)
-		sky_mat.ground_horizon_color = Color(0.7, 0.75, 0.8)
-		sky.sky_material = sky_mat
+	sky.sky_material = SkyBuilder.material()
+	sky.radiance_size = Sky.RADIANCE_SIZE_256
 	env.background_mode = Environment.BG_SKY
 	env.sky = sky
 	env.ambient_light_source = Environment.AMBIENT_SOURCE_SKY
-	env.background_energy_multiplier = 1.0
-	# The sky photo contains the sun, so its ambient share is kept low to avoid counting it twice.
-	env.ambient_light_energy = 0.75
+	env.ambient_light_energy = 1.0
 	env.reflected_light_source = Environment.REFLECTION_SOURCE_SKY
-	# Film-like response: no clipped highlights, slightly muted colour.
+	# Film response (AgX) and a procedural colour grade.
 	env.tonemap_mode = Environment.TONE_MAPPER_AGX
 	env.tonemap_exposure = EXPOSURE
+	env.tonemap_agx_contrast = AGX_CONTRAST
 	env.adjustment_enabled = true
-	env.adjustment_contrast = 1.06
-	env.adjustment_saturation = 0.92
-	# Indirect light and contact shading.
-	# Light bouncing between the containers, and sky light that no longer reaches into closed corners.
-	env.sdfgi_enabled = false
+	env.adjustment_color_correction = SkyBuilder.grade_lut()
+	# Indirect light: SDFGI for the bounce between walls, SSIL for the small
+	# things, SSAO for contact darkening, SSR for wet and metal surfaces.
+	env.sdfgi_enabled = USE_SDFGI
 	env.sdfgi_use_occlusion = true
 	env.sdfgi_read_sky_light = true
-	env.sdfgi_energy = 1.35
-	env.sdfgi_min_cell_size = 0.2
-	env.ssil_enabled = false
+	env.sdfgi_bounce_feedback = 0.45
+	env.sdfgi_cascades = 4
+	env.sdfgi_min_cell_size = 0.25
+	env.sdfgi_energy = 1.0
+	env.ssil_enabled = true
+	env.ssil_radius = 4.0
+	env.ssil_intensity = 0.8
 	env.ssao_enabled = true
-	env.ssao_radius = 0.7
-	env.ssao_intensity = 2.0
+	env.ssao_radius = 1.1
+	env.ssao_intensity = 1.8
+	env.ssao_power = 1.6
+	env.ssao_detail = 0.6
+	env.ssao_light_affect = 0.15
+	env.ssr_enabled = true
+	env.ssr_max_steps = 48
+	env.ssr_fade_in = 0.12
+	env.ssr_fade_out = 2.5
+	# Bloom only from what is really bright: the sun, flashes, hot metal.
 	env.glow_enabled = true
-	env.glow_intensity = 0.5
-	env.glow_bloom = 0.04
-	env.glow_hdr_threshold = 0.95
-	env.glow_blend_mode = Environment.GLOW_BLEND_MODE_SOFTLIGHT
-	# Sunlight in the air: shafts of light between the containers, haze in the distance.
+	env.glow_blend_mode = Environment.GLOW_BLEND_MODE_SCREEN
+	env.glow_intensity = 0.45
+	env.glow_strength = 1.0
+	env.glow_bloom = 0.0
+	env.glow_hdr_threshold = 1.15
+	env.glow_hdr_scale = 2.0
+	# Sunlit air: shafts between buildings and a little in-scatter close by.
 	env.volumetric_fog_enabled = true
-	env.volumetric_fog_density = 0.0075
-	env.volumetric_fog_albedo = Color(0.9, 0.9, 0.88)
-	env.volumetric_fog_anisotropy = 0.65
-	env.volumetric_fog_length = 70.0
+	env.volumetric_fog_density = 0.0018
+	env.volumetric_fog_albedo = Color(0.82, 0.86, 0.92)
+	env.volumetric_fog_anisotropy = 0.7
+	env.volumetric_fog_length = 96.0
+	env.volumetric_fog_detail_spread = 2.0
+	env.volumetric_fog_ambient_inject = 0.5
 	env.volumetric_fog_sky_affect = 0.0
-	env.volumetric_fog_ambient_inject = 0.3
-	# Thin haze that takes its colour from the sky, and leaves the sky itself clear.
+	env.volumetric_fog_temporal_reprojection_enabled = true
+	# Aerial perspective: distance takes the colour of the sky behind it (blue-grey,
+	# not white), and only far away.
 	env.fog_enabled = true
-	env.fog_density = 0.0012
-	env.fog_light_color = Color(0.7, 0.75, 0.8)
-	env.fog_aerial_perspective = 0.6
+	env.fog_mode = Environment.FOG_MODE_EXPONENTIAL
+	env.fog_density = 0.0009
+	env.fog_aerial_perspective = 1.0
 	env.fog_sky_affect = 0.0
+	env.fog_sun_scatter = 0.15
+	env.fog_height = 6.0
+	env.fog_height_density = 0.004
 	var we := WorldEnvironment.new()
 	we.environment = env
+	# Eye adaptation: a little brighter in the shade, a little darker against the sky.
+	var cam_attr := CameraAttributesPractical.new()
+	cam_attr.auto_exposure_enabled = true
+	cam_attr.auto_exposure_scale = AUTO_EXPOSURE_GREY
+	cam_attr.auto_exposure_speed = 1.6
+	cam_attr.auto_exposure_min_sensitivity = 60.0
+	cam_attr.auto_exposure_max_sensitivity = 220.0
+	we.camera_attributes = cam_attr
 	add_child(we)
 
 	var sun := DirectionalLight3D.new()
-	sun.rotation = Vector3(deg_to_rad(-50.0), deg_to_rad(35.0), 0.0)
-	if pano != null:
-		# Put the sun light where the sun sits in the sky photo, so shadows agree with it.
-		var to_sun := _sun_direction(pano)
-		if to_sun.y > 0.15:
-			sun.look_at_from_position(Vector3.ZERO, -to_sun)
+	var el := deg_to_rad(SUN_ELEVATION)
+	var az := deg_to_rad(SUN_AZIMUTH)
+	var to_sun := Vector3(sin(az) * cos(el), sin(el), -cos(az) * cos(el))
+	sun.look_at_from_position(Vector3.ZERO, -to_sun)
 	sun.shadow_enabled = true
 	sun.light_energy = SUN_ENERGY
-	sun.light_color = Color(1.0, 0.96, 0.9)
-	sun.light_angular_distance = 0.7
-	sun.light_volumetric_fog_energy = 2.4
+	sun.light_color = Color(1.0, 0.95, 0.87)
+	# Angular size > 0: shadows harden at contact and soften with distance (PCSS).
+	sun.light_angular_distance = 0.6
+	sun.light_volumetric_fog_energy = 1.6
+	sun.light_indirect_energy = 1.0
 	sun_light = sun
-	sun.directional_shadow_max_distance = 90.0
-	sun.shadow_blur = 1.3
+	sun.directional_shadow_mode = DirectionalLight3D.SHADOW_PARALLEL_4_SPLITS
+	sun.directional_shadow_max_distance = 110.0
+	sun.directional_shadow_split_1 = 0.05
+	sun.directional_shadow_split_2 = 0.16
+	sun.directional_shadow_split_3 = 0.42
+	sun.directional_shadow_blend_splits = true
+	sun.directional_shadow_fade_start = 0.85
+	sun.shadow_bias = 0.04
+	sun.shadow_normal_bias = 1.2
+	sun.shadow_blur = 1.0
 	add_child(sun)
 
 
@@ -2133,6 +2149,10 @@ func _run_flash_test() -> void:
 			await _save_view("sniper_editor_%d" % k)
 		get_tree().quit(0)
 		return
+	if OS.get_cmdline_user_args().has("--lightshots"):
+		await _light_shots()
+		get_tree().quit(0)
+		return
 	if OS.get_cmdline_user_args().has("--sunshot"):
 		var to_sun := sun_light.global_basis.z
 		print("SUN elevation deg ", rad_to_deg(asin(to_sun.y)))
@@ -2593,6 +2613,36 @@ func _sun_fx() -> void:
 		sun_rays.set_shader_parameter("sun_uv", at)
 		sun_rays.set_shader_parameter("sun_on", on)
 
+
+
+# --lightshots: the range seen at four headings round the sun, the sky and a shot
+# in the shade, each with the average fps over two seconds.
+func _light_shots() -> void:
+	DisplayServer.window_set_vsync_mode(DisplayServer.VSYNC_DISABLED)
+	var to_sun := sun_light.global_basis.z
+	var sun_yaw := atan2(-to_sun.x, -to_sun.z)
+	var views := [[0.0, -0.12, "light_sun"], [PI * 0.5, -0.1, "light_side"], [PI, -0.08, "light_away"],
+			[PI * 1.5, -0.1, "light_side2"], [PI * 0.8, 0.45, "light_sky"], [PI * 1.15, -0.02, "light_far"]]
+	var total := 0.0
+	for v: Array in views:
+		player.yaw = sun_yaw + float(v[0])
+		player.pitch = float(v[1])
+		await _wait(1.2)
+		var f0 := Engine.get_frames_drawn()
+		var t0 := Time.get_ticks_usec()
+		await _wait(2.0)
+		var fps := (Engine.get_frames_drawn() - f0) / ((Time.get_ticks_usec() - t0) / 1e6)
+		total += fps
+		print("LIGHTSHOT %s fps=%.1f" % [v[2], fps])
+		await _save_view(v[2])
+	print("LIGHTSHOT average fps=%.1f" % (total / views.size()))
+	player.yaw = sun_yaw + PI * 0.6
+	player.pitch = -0.05
+	await _wait(0.6)
+	player.ai = {"fire": true}
+	await _wait(0.03)
+	await _save_view("light_flash")
+	player.ai = {}
 
 
 # --skin=N for the test views (default DAMATTER, 5).
