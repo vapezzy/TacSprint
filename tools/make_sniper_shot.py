@@ -114,9 +114,14 @@ def dry_shot(suppressed):
         blast = low(blast, 380) * 0.45
         body = low(body, 900) * 0.35
         mech *= 2.6
+    # The bang: a loud, hard-clipped mid/high explosion over the first ~40 ms,
+    # the part of the report that cuts through everything.
+    bang = band(noise(d), j(650), j(4800), 2) * np.exp(-t * j(55))
+    bang = sat(bang * 5.0, 3.0) * np.exp(-t * 20)
     if suppressed:
         kick *= 0.12
-    mix = tr * 1.7 + crack * 2.3 + blast * 1.05 + kick * 1.0 + body * 1.3 + mech * 0.06
+        bang *= 0.1
+    mix = tr * 1.8 + crack * 2.3 + bang * 1.6 + blast * 1.05 + kick * 1.0 + body * 1.3 + mech * 0.06
     return sat(high(mix, 38, 2), 1.4)
 
 
