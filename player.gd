@@ -1341,7 +1341,7 @@ func _fire() -> void:
 		blast.restart()
 	var sfx := str(w.get("sfx", ""))
 	if sfx != "":
-		var level: float = {"sniper": 4.0, "ar": -2.0, "smg": -3.5, "pistol": -3.0}.get(sfx, -3.0)
+		var level: float = {"sniper": 6.0, "ar": -2.0, "smg": -3.5, "pistol": -3.0}.get(sfx, -3.0)
 		_play("shot", sfx + ("_shot_sup.wav" if w.get("suppressed", false) else "_shot.wav"), level)
 	if w.has("bolt"):
 		# Bolt action: the case only comes out when the bolt is pulled back.

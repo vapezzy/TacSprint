@@ -116,7 +116,7 @@ def dry_shot(suppressed):
         mech *= 2.6
     # The bang: a loud, hard-clipped mid/high explosion over the first ~40 ms,
     # the part of the report that cuts through everything.
-    bang = band(noise(d), j(500), j(5200), 2) * np.exp(-t * j(38))
+    bang = band(noise(d), j(450), j(3400), 2) * np.exp(-t * j(38))
     bang = sat(bang * 7.0, 3.5) * np.exp(-t * 14)
     # Explosion body: a big low/mid noise blast like a detonation, ~0.25 s.
     boom = sat(band(noise(d), 40, 450, 2) * np.exp(-t * j(13)) * 5.0, 2.5)
@@ -124,8 +124,12 @@ def dry_shot(suppressed):
         kick *= 0.12
         bang *= 0.1
         boom *= 0.08
-    mix = tr * 1.8 + crack * 2.3 + bang * 2.2 + boom * 1.1 + blast * 1.35 + kick * 2.2 + body * 1.3 + mech * 0.06
-    return sat(high(mix, 38, 2), 1.7)
+    mix = tr * 1.5 + crack * 1.4 + bang * 2.2 + boom * 1.3 + blast * 1.45 + kick * 2.7 + body * 1.3 + mech * 0.06
+    mix = high(mix, 38, 2)
+    if not suppressed:
+        # Fewer highs: everything above ~5 kHz pulled down by half.
+        mix = mix - high(mix, 5000, 2) * 0.5
+    return sat(mix, 1.7)
 
 
 def tail(dry, total, suppressed):
