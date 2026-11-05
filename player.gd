@@ -1342,11 +1342,6 @@ func _fire() -> void:
 	var sfx := str(w.get("sfx", ""))
 	if sfx != "":
 		var level: float = {"sniper": 0.0, "ar": -2.0, "smg": -3.5, "pistol": -3.0}.get(sfx, -3.0)
-		if sfx == "sniper" and not w.get("suppressed", false):
-			# The bang: a second, lower layer of the same shot under it.
-			_play("shot_low", "sniper_shot.wav", -3.0 + 3.0 * hip)
-			if _sfx.has("shot_low"):
-				(_sfx["shot_low"] as AudioStreamPlayer).pitch_scale = 0.72
 		_play("shot", sfx + ("_shot_sup.wav" if w.get("suppressed", false) else "_shot.wav"), level)
 	if w.has("bolt"):
 		# Bolt action: the case only comes out when the bolt is pulled back.
