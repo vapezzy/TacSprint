@@ -124,7 +124,7 @@ def dry_shot(suppressed):
         kick *= 0.12
         bang *= 0.1
         boom *= 0.08
-    mix = tr * 1.8 + crack * 2.3 + bang * 2.2 + boom * 1.1 + blast * 1.2 + kick * 1.7 + body * 1.3 + mech * 0.06
+    mix = tr * 1.8 + crack * 2.3 + bang * 2.2 + boom * 1.1 + blast * 1.35 + kick * 2.2 + body * 1.3 + mech * 0.06
     return sat(high(mix, 38, 2), 1.7)
 
 
