@@ -116,8 +116,8 @@ def dry_shot(suppressed):
         mech *= 2.6
     if suppressed:
         kick *= 0.12
-    mix = tr * 1.3 + crack * 1.9 + blast * 0.8 + kick * 0.7 + body * 1.2 + mech * 0.06
-    return sat(high(mix, 38, 2), 1.15)
+    mix = tr * 1.7 + crack * 2.3 + blast * 1.05 + kick * 1.0 + body * 1.3 + mech * 0.06
+    return sat(high(mix, 38, 2), 1.4)
 
 
 def tail(dry, total, suppressed):
@@ -176,8 +176,8 @@ def shot(name, suppressed=False):
     # A hair of width on the dry part, so it fills the head without smearing the hit.
     dl = d
     dr = np.concatenate([np.zeros(12), d[:-12]]) * 0.97
-    left = sat(dl + tl * 1.1, 1.05)
-    right = sat(dr + tr * 1.1, 1.05)
+    left = sat(dl + tl * 1.3, 1.1)
+    right = sat(dr + tr * 1.3, 1.1)
     save(name, left, right, 0.8 if suppressed else 0.97)
 
 
