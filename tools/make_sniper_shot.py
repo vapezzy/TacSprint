@@ -97,9 +97,9 @@ def dry_shot(suppressed):
     # a short low-mid 'punch' around 100-200 Hz that small speakers can show.
     kf = (j(130) - 52) * np.exp(-t * 45) + 52
     kick = np.sin(2 * np.pi * np.cumsum(kf) / RATE) * (1 - np.exp(-t * 3000)) * np.exp(-t * j(15))
-    subn = np.sin(2 * np.pi * np.cumsum(kf * 0.0 + j(48, 0.03)) / RATE) * (1 - np.exp(-t * 400)) * np.exp(-t * j(10))
+    subn = np.sin(2 * np.pi * np.cumsum(kf * 0.0 + j(41, 0.03)) / RATE) * (1 - np.exp(-t * 400)) * np.exp(-t * j(7))
     punch = band(noise(d), 90, 230, 2) * np.exp(-t * j(26)) * 2.2
-    kick = sat(kick * 1.0 + subn * 0.45 + punch, 1.3)
+    kick = sat(kick * 1.0 + subn * 1.0 + punch, 1.3)
     # 4. body: short mid bark.
     body = band(noise(d), 280, 1600, 2) * np.exp(-t * j(42)) * 1.4
     body = sat(body, 2.0)
