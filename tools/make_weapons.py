@@ -264,7 +264,7 @@ def sn_bolt(p):
 
 def sn_glass(p):
     return union(cyl(p, v(0, SCOPE_Y, -0.242), v(0, SCOPE_Y, -0.234), 0.0249),
-                 cyl(p, v(0, SCOPE_Y, 0.156), v(0, SCOPE_Y, 0.166), 0.0174))
+                 cyl(p, v(0, SCOPE_Y, 0.174), v(0, SCOPE_Y, 0.184), 0.0205))
 
 
 def sn_mag(p):
@@ -576,62 +576,96 @@ def _brake(p, z, half_w, half_h, half_l):
     return cut(brake, cyl(p, v(0, SN_Y, z - half_l * 1.4), v(0, SN_Y, z - half_l * 0.6), 0.0072))
 
 
+def _knurl_band(p, z0, z1, r, pitch, depth, w):
+    """A ring round the scope axis with a diamond knurl: two sets of helical
+    grooves crossing, leaving rows of little pyramids."""
+    q = p - v(0, SCOPE_Y, 0)
+    ang = np.arctan2(q[:, 1], q[:, 0])
+    rad = np.sqrt(q[:, 0] ** 2 + q[:, 1] ** 2)
+    band = cyl(p, v(0, SCOPE_Y, z0), v(0, SCOPE_Y, z1), r, 0.0012)
+    u = ang * r
+    g1 = np.abs(np.mod((u + q[:, 2]) / pitch, 1.0) - 0.5) * pitch
+    g2 = np.abs(np.mod((u - q[:, 2]) / pitch, 1.0) - 0.5) * pitch
+    grooves = np.maximum(np.minimum(g1, g2) - w, (r - depth) - rad)
+    return cut(band, grooves)
+
+
+def _ribbed(p, axis, a, length, r, ribs, depth):
+    """A knob with straight ribs round its rim (turret caps)."""
+    b = a + axis * length
+    knob = cyl(p, a, b, r, 0.0015)
+    q = p - a
+    along = q @ axis
+    radial_v = q - along[:, None] * axis
+    rad = np.linalg.norm(radial_v, axis=1)
+    helper = v(0, 0, 1.0) if abs(axis[2]) < 0.5 else v(1.0, 0, 0)
+    e1 = np.cross(axis, helper)
+    e1 = e1 / np.linalg.norm(e1)
+    e2 = np.cross(axis, e1)
+    ang = np.arctan2(radial_v @ e2, radial_v @ e1)
+    slot = np.abs(np.mod(ang * ribs / (2 * np.pi), 1.0) - 0.5) * (2 * np.pi * r / ribs) - 0.0011
+    grooves = np.maximum(np.maximum(slot, (r - depth) - rad), np.maximum(-along + 0.0015, along - length + 0.0015))
+    return cut(knob, grooves)
+
+
 def sn_scope(p):
-    """A big 5-25x56 tactical scope: objective bell with a sunshade, elevation and
-    windage turrets with knurled caps, a parallax knob on the left, a throw
-    lever on the zoom ring, and two rings with clamp screws."""
-    # The tube runs on into the bell, so the two are one piece (it used to stop
-    # 2 cm short, leaving a gap you could see through from the side).
-    tube = cyl(p, v(0, SCOPE_Y, -0.2), v(0, SCOPE_Y, 0.1), 0.0165, 0.002)
-    bell = smin(cyl(p, v(0, SCOPE_Y, -0.245), v(0, SCOPE_Y, -0.13), 0.0295, 0.003), tube, 0.016)
-    shade = cyl(p, v(0, SCOPE_Y, -0.27), v(0, SCOPE_Y, -0.24), 0.0292, 0.002)
-    eye = smin(cyl(p, v(0, SCOPE_Y, 0.1), v(0, SCOPE_Y, 0.172), 0.0215, 0.003), tube, 0.008)
-    zoom = cyl(p, v(0, SCOPE_Y, 0.116), v(0, SCOPE_Y, 0.136), 0.0232, 0.0015)
-    for k in range(24):
-        a = k * np.pi / 12
-        zoom = cut(zoom, box(p, v(np.cos(a) * 0.0236, SCOPE_Y + np.sin(a) * 0.0236, 0.126), (0.0016, 0.0016, 0.012), 0, 0.0005))
-    lever = box(p, v(0.026, SCOPE_Y + 0.008, 0.126), (0.009, 0.004, 0.006), 0, 0.002)
-    saddle = box(p, v(0, SCOPE_Y, 0.0), (0.021, 0.021, 0.022), 0, 0.006)
-    def turret(axis, length, radius):
-        a = v(0, SCOPE_Y, 0.0)
-        b = a + axis * length
-        t = cyl(p, a, b, radius, 0.002)
-        cap = cyl(p, a + axis * (length - 0.016), b, radius * 1.18, 0.002)
-        n = 28
-        for k in range(n):
-            ang = k * 2 * np.pi / n
-            # Knurling: little grooves round the cap.
-            if axis[1] > 0.5:
-                off = v(np.cos(ang) * radius * 1.2, length - 0.008, np.sin(ang) * radius * 1.2)
-            elif axis[0] > 0.5:
-                off = v(length - 0.008, np.cos(ang) * radius * 1.2, np.sin(ang) * radius * 1.2)
-            else:
-                off = v(-(length - 0.008), np.cos(ang) * radius * 1.2, np.sin(ang) * radius * 1.2)
-            cap = cut(cap, ball(p, a + off, 0.0016))
-        # Scale marks round the turret body, the way a real turret is graduated.
-        base = v(0, SCOPE_Y, 0.0)
-        helper = v(0, 0, 1.0) if abs(axis[2]) < 0.5 else v(1.0, 0, 0)
+    """A big 5-25x56 tactical scope in the style of a modern sniper optic: a long
+    objective bell with a sunshade, a tall square-shouldered saddle, a ribbed
+    elevation cap, a wide ribbed windage cap, a large parallax wheel on the
+    left, a long eyepiece with a deep diamond-knurled magnification ring and a
+    throw lever, and two tall rings with cross bolts."""
+    Y = SCOPE_Y
+    tube = cyl(p, v(0, Y, -0.2), v(0, Y, 0.1), 0.0165, 0.002)
+    bell = smin(cyl(p, v(0, Y, -0.235), v(0, Y, -0.135), 0.0295, 0.003), tube, 0.018)
+    shade = cyl(p, v(0, Y, -0.285), v(0, Y, -0.232), 0.029, 0.0018)
+    shade = cut(shade, cyl(p, v(0, Y, -0.262), v(0, Y, -0.259), 0.0305))            # seam where it screws on
+    bell = cut(bell, cyl(p, v(0, Y, -0.2), v(0, Y, -0.197), 0.031))                 # line round the bell
+    # Eyepiece: flares out from the tube, a big knurled zoom ring, the ocular bell.
+    eye = smin(cyl(p, v(0, Y, 0.1), v(0, Y, 0.112), 0.0205, 0.002), tube, 0.01)
+    zoom = _knurl_band(p, 0.112, 0.146, 0.0262, 0.0062, 0.0016, 0.0009)
+    ocular = smin(cyl(p, v(0, Y, 0.146), v(0, Y, 0.192), 0.0242, 0.0025),
+                  cyl(p, v(0, Y, 0.146), v(0, Y, 0.152), 0.0228, 0.001), 0.003)
+    ocular = cut(ocular, cyl(p, v(0, Y, 0.172), v(0, Y, 0.174), 0.026))            # diopter ring line
+    lever = union(box(p, v(0.0, Y + 0.031, 0.129), (0.0045, 0.007, 0.006), 0, 0.002),
+                  ball(p, v(0.0, Y + 0.039, 0.129), 0.005))
+    # Saddle: square shoulders under the turrets.
+    saddle = box(p, v(0, Y, 0.0), (0.023, 0.023, 0.026), 0, 0.007)
+    up, right, left = v(0, 1, 0), v(1, 0, 0), v(-1, 0, 0)
+    a0 = v(0, Y, 0.0)
+    elev = union(cyl(p, a0, a0 + up * 0.036, 0.0135, 0.002), _ribbed(p, up, a0 + up * 0.032, 0.018, 0.0165, 36, 0.0014))
+    elev = cut(elev, cyl(p, a0 + up * 0.0495, a0 + up * 0.052, 0.009))           # cap face recess
+    wind = union(cyl(p, a0, a0 + right * 0.03, 0.0125, 0.002), _ribbed(p, right, a0 + right * 0.028, 0.015, 0.0185, 40, 0.0014))
+    wind = cut(wind, cyl(p, a0 + right * 0.0415, a0 + right * 0.045, 0.011))
+    para = union(cyl(p, a0, a0 + left * 0.026, 0.013, 0.002), _ribbed(p, left, a0 + left * 0.024, 0.011, 0.0215, 44, 0.0013))
+    # Turret scales.
+    for axis, length, radius in ((up, 0.036, 0.0135), (right, 0.03, 0.0125)):
+        helper = v(0, 0, 1.0)
         w = np.cross(axis, helper)
         for k in range(30):
             ang = k * 2.0 * np.pi / 30.0
             dirv = helper * np.cos(ang) + w * np.sin(ang)
-            tick = 0.0075 if k % 5 == 0 else 0.0045
-            lo = base + axis * (length - 0.031) + dirv * radius
-            hi = base + axis * (length - 0.031 + tick) + dirv * radius
-            t = cut(t, seg(p, lo, hi, 0.0009))
-        return union(t, cap)
-    turrets = union(turret(v(0, 1, 0), 0.046, 0.0125), turret(v(1, 0, 0), 0.042, 0.0115), turret(v(-1, 0, 0), 0.038, 0.0135))
-    d = union(bell, shade, eye, zoom, lever, saddle, turrets)
-    for z in (-0.075, 0.062):
-        ring = cyl(p, v(0, SCOPE_Y, z - 0.009), v(0, SCOPE_Y, z + 0.009), 0.0205, 0.002)
-        foot = box(p, v(0, 0.053, z), (0.0125, 0.0125, 0.009), 0, 0.002)
-        ring = smin(ring, foot, 0.004)
+            tick = 0.007 if k % 5 == 0 else 0.004
+            lo = a0 + axis * (length - 0.012) + dirv * radius
+            hi = a0 + axis * (length - 0.012 + tick) + dirv * radius
+            if axis is up:
+                elev = cut(elev, seg(p, lo, hi, 0.0008))
+            else:
+                wind = cut(wind, seg(p, lo, hi, 0.0008))
+    d = union(bell, shade, eye, zoom, ocular, lever, saddle, elev, wind, para)
+    # Rings: tall, with the top cap held by a bolt on each side, a cross bolt below.
+    for z in (-0.08, 0.066):
+        ring = cyl(p, v(0, Y, z - 0.011), v(0, Y, z + 0.011), 0.0215, 0.002)
+        foot = box(p, v(0, 0.054, z), (0.014, 0.014, 0.011), 0, 0.002)
+        ring = smin(ring, foot, 0.005)
+        ring = cut(ring, box(p, v(0, Y, z), (0.03, 0.0008, 0.013), 0, 0.0002))      # split line of the cap
         for sx in (-1.0, 1.0):
-            ring = union(ring, cyl(p, v(sx * 0.014, SCOPE_Y + 0.012, z), v(sx * 0.0215, SCOPE_Y + 0.012, z), 0.0032, 0.0006))
-        ring = union(ring, cyl(p, v(0.01, 0.05, z), v(0.017, 0.05, z), 0.004, 0.0008))       # clamp nut
+            for dz in (-0.006, 0.006):
+                ring = union(ring, cyl(p, v(sx * 0.016, Y + 0.009, z + dz), v(sx * 0.0225, Y + 0.009, z + dz), 0.0024, 0.0005))
+        ring = union(ring, cyl(p, v(-0.016, 0.047, z), v(0.019, 0.047, z), 0.0034, 0.0006))   # cross bolt
+        ring = union(ring, cyl(p, v(0.017, 0.047, z), v(0.0215, 0.047, z), 0.0055, 0.0008))  # its nut
         d = np.minimum(d, ring)
-    d = cut(d, cyl(p, v(0, SCOPE_Y, -0.28), v(0, SCOPE_Y, -0.236), 0.025))
-    return cut(d, cyl(p, v(0, SCOPE_Y, 0.162), v(0, SCOPE_Y, 0.18), 0.0175))
+    d = cut(d, cyl(p, v(0, Y, -0.3), v(0, Y, -0.236), 0.0255))
+    return cut(d, cyl(p, v(0, Y, 0.18), v(0, Y, 0.2), 0.0205))
 
 
 def sn_mag(p):
@@ -695,7 +729,7 @@ def attachments():
     build_hi("sniper_barrel_standard", [(0, sn_barrel_standard)], b_lo, b_hi, 0.45)
     build_hi("sniper_barrel_long", [(0, sn_barrel_long)], b_lo, b_hi, 0.45)
     build_hi("sniper_barrel_sup", [(0, sn_barrel_sup)], b_lo, b_hi, 0.45)
-    o_lo, o_hi = (-0.055, 0.035, -0.285), (0.06, 0.14, 0.19)
+    o_lo, o_hi = (-0.06, 0.03, -0.3), (0.065, 0.145, 0.205)
     build_hi("sniper_optic_scope", [(3, sn_glass), (0, sn_scope)], o_lo, o_hi, 0.45)
     build_hi("sniper_optic_compact", [(3, sn_glass_compact), (0, sn_scope_compact)], o_lo, o_hi, 0.45)
     build_hi("sniper_optic_dot", [(0, sn_dot)], o_lo, o_hi, 0.5)
