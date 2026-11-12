@@ -976,12 +976,14 @@ func _process(_dt: float) -> void:
 	scope_vp.render_target_update_mode = SubViewport.UPDATE_ALWAYS if player.scoped else SubViewport.UPDATE_DISABLED
 	if player.scoped:
 		scope_cam.global_transform = player.cam.global_transform
-		if player.w.has("scope_mag"):
-			# Magnification N: the scope shows 1/N of the view's angle.
-			scope_cam.fov = rad_to_deg(2.0 * atan(tan(deg_to_rad(player.base_fov) * 0.5) / float(player.w["scope_mag"])))
-		else:
-			scope_cam.fov = player.base_fov * float(player.w.get("scope_zoom", 0.15))
 		var lens: Array = player.scope_circle()
+		# Like a real scope seen from a hand's width behind the eyepiece: the lens
+		# is a circle in the middle of an ordinary view, and through it things are
+		# N times as large as they look right next to it. So the scope camera
+		# covers the lens's own angle divided by N.
+		var lens_tan := tan(deg_to_rad(player.cam.fov) * 0.5) * 2.0 * float(lens[1])
+		var mag := float(player.w.get("scope_mag", 8.0))
+		scope_cam.fov = rad_to_deg(2.0 * atan(lens_tan / maxf(mag, 1.0)))
 		scope_mat.set_shader_parameter("centre", lens[0])
 		scope_mat.set_shader_parameter("radius", lens[1])
 		# Shadow in the lens: nothing for calm aiming, growing with the speed of the swing.
