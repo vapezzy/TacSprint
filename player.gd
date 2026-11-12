@@ -69,6 +69,7 @@ const EYE_PRONE := 0.42
 # Inspect: the weapon is held up one-handed, left side to the camera, muzzle high.
 const INSPECT_POS := Vector3(0.16, -0.095, -0.4)
 const INSPECT_ROLL := -70.0
+const INSPECT_POS_BOLT := Vector3(-0.02, -0.11, -0.42)
 const INSPECT_YAW := 75.0
 
 var ai_enabled := false
@@ -1726,7 +1727,9 @@ func _update_view(dt: float) -> void:
 	var step_time: float = [0.3, 0.26, 0.4][clampi(int(inspect_p if want > inspect_p else inspect_p - 0.001), 0, 2)]
 	inspect_p = move_toward(inspect_p, want, dt / step_time)
 	var ins := smoothstep(0.0, 1.0, clampf(inspect_p, 0.0, 1.0))
-	pos = pos.lerp(INSPECT_POS, ins)
+	# The bolt rifle is held across the chest, its action in front of the body, so
+	# the hand working the bolt stays close in instead of reaching out to the right.
+	pos = pos.lerp(INSPECT_POS_BOLT if w.has("bolt") else INSPECT_POS, ins)
 	# Reloading: the weapon is canted so the magazine well turns towards the support
 	# hand, held there while the magazines are swapped, and jolts when the new one seats.
 	var reload_r := 0.0 if reloading <= 0.0 else clampf(1.0 - reloading / maxf(reload_time(), 0.01), 0.001, 1.0)

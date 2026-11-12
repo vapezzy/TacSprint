@@ -957,10 +957,10 @@ func _pose_digits(skel: Skeleton3D, bones: Array, right: bool) -> void:
 # parent). Chosen so that at the hip the solved elbows land where the arm meshes
 # were modelled; from there on the humerus head never leaves its socket.
 const UPPER_ARM := 0.33
-const RIGHT_SHOULDER := Vector3(0.25, -0.21, 0.42)
+const RIGHT_SHOULDER := Vector3(0.2, -0.27, 0.38)
 const LEFT_SHOULDER := Vector3(-0.19, -0.23, 0.18)
-const RIGHT_POLE := Vector3(0.6, -1.0, 0.1)
-const LEFT_POLE := Vector3(-0.5, -1.0, 0.2)
+const RIGHT_POLE := Vector3(0.12, -1.0, 0.05)
+const LEFT_POLE := Vector3(-0.15, -1.0, 0.1)
 
 
 func _process_arms() -> void:
