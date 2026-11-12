@@ -50,6 +50,12 @@ var _parent: Node3D
 var gun_part: MeshInstance3D
 var left_hand_part: MeshInstance3D
 var right_hand_part: MeshInstance3D
+var right_sleeve_part: MeshInstance3D
+# Upper arms: each hangs from a fixed shoulder socket in camera space, and the
+# elbow is solved (two-bone IK) every frame, so the arms never come loose from
+# the body however the weapon moves.
+var right_upper: MeshInstance3D
+var left_upper: MeshInstance3D
 var _right_on_bolt := 0
 # Variations, picked by the player each time: the bolt worked with the hand over the
 # knob or hooked under it (tools/make_arms.py right_bolt_hook), and two ways to reload.
@@ -166,7 +172,7 @@ func _init() -> void:
 	right_skel = Skeleton3D.new()
 	right_hand_part.add_child(right_skel)
 	_skin_hand(true, "right_hand.bin")
-	_part("right_sleeve.bin", cloth)
+	right_sleeve_part = _part("right_sleeve.bin", cloth)
 	_parent = bolt
 	bolt_part = _part("sniper_bolt.bin", weapon_mat)
 	bolt_part.position = -BOLT_AXIS
@@ -214,6 +220,10 @@ func _init() -> void:
 	_parent = self
 	_build_flash()
 	_build_held_items()
+	right_upper = _part("upper_sleeve.bin", cloth)
+	left_upper = _part("upper_sleeve.bin", cloth)
+	for u: MeshInstance3D in [right_upper, left_upper]:
+		u.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 
 	# Soft fill so the weapon keeps its detail on the shaded side.
 	var fill := OmniLight3D.new()
@@ -623,16 +633,19 @@ func _set_left(state: String) -> void:
 			left_sleeve_part.mesh = Assets.mesh("left_hold_sleeve.bin" if plain_hold else "left_sleeve.bin")
 			left_hand_part.position = hold_offset
 			left_sleeve_part.position = hold_offset
+			_left_sleeve_off = hold_offset
 		"open":
 			_skin_hand(false, "left_open_hand.bin")
 			left_sleeve_part.mesh = Assets.mesh("left_sleeve.bin")
 			left_hand_part.position = Vector3.ZERO
 			left_sleeve_part.position = Vector3.ZERO
+			_left_sleeve_off = Vector3.ZERO
 		"mag":
 			_skin_hand(false, mag_hand)
 			left_sleeve_part.mesh = Assets.mesh("left_sleeve.bin")
 			left_hand_part.position = Vector3.ZERO
 			left_sleeve_part.position = Vector3.ZERO
+			_left_sleeve_off = Vector3.ZERO
 
 
 # Which finger pose the support hand has at this point of a reload or inspect.
@@ -826,6 +839,7 @@ func _animate_flash(dt: float) -> void:
 
 func _process(dt: float) -> void:
 	_animate_flash(dt)
+	_process_arms()
 
 
 func _build_flash() -> void:
@@ -935,3 +949,69 @@ func _pose_digits(skel: Skeleton3D, bones: Array, right: bool) -> void:
 			var b := 1 + d * 3 + j
 			var hinge: Vector3 = bones[b][2]
 			skel.set_bone_pose_rotation(b, Quaternion(hinge, a * share[j]))
+
+
+
+# --- shoulders -------------------------------------------------------------------
+# Shoulder sockets and the way each elbow points, in camera space (this node's
+# parent). Chosen so that at the hip the solved elbows land where the arm meshes
+# were modelled; from there on the humerus head never leaves its socket.
+const UPPER_ARM := 0.33
+const RIGHT_SHOULDER := Vector3(0.25, -0.21, 0.42)
+const LEFT_SHOULDER := Vector3(-0.19, -0.23, 0.18)
+const RIGHT_POLE := Vector3(0.6, -1.0, 0.1)
+const LEFT_POLE := Vector3(-0.5, -1.0, 0.2)
+
+
+func _process_arms() -> void:
+	_solve_arm(right_arm, right_sleeve_part, right_upper, RIGHT_WRIST, RIGHT_ELBOW, RIGHT_SHOULDER, RIGHT_POLE, Vector3.ZERO)
+	_solve_arm(left_arm, left_sleeve_part, left_upper, LEFT_WRIST, LEFT_ELBOW, LEFT_SHOULDER, LEFT_POLE, _left_sleeve_off)
+
+
+var _left_sleeve_off := Vector3.ZERO
+
+
+func _solve_arm(arm: Node3D, sleeve: MeshInstance3D, upper: MeshInstance3D, wrist: Vector3, elbow: Vector3,
+		shoulder: Vector3, pole: Vector3, off: Vector3) -> void:
+	if sleeve == null or upper == null:
+		return
+	upper.visible = arm.visible and sleeve.visible
+	if not upper.visible:
+		return
+	var forearm := (elbow - wrist).length()
+	var to_cam := transform * arm.transform
+	var w_c := to_cam * (wrist + off)
+	var e_c := _ik_elbow(shoulder, w_c, pole, UPPER_ARM, forearm)
+	# Forearm: turned about the wrist so it points at the solved elbow (stretched
+	# a touch if the hand reaches beyond the arm's length).
+	var e_arm := to_cam.affine_inverse() * e_c
+	var pivot := wrist + off
+	var a0 := elbow - wrist
+	var a1 := e_arm - pivot
+	var r := Basis(Quaternion(a0.normalized(), a1.normalized()))
+	var n := a0.normalized()
+	var k := maxf(a1.length() / a0.length(), 1.0) - 1.0
+	var stretch := Basis(Vector3(1, 0, 0) + n * n.x * k, Vector3(0, 1, 0) + n * n.y * k, Vector3(0, 0, 1) + n * n.z * k)
+	var b := r * stretch
+	sleeve.transform = Transform3D(b, pivot - b * pivot)
+	# Upper arm: from the elbow to the socket.
+	var inv := transform.affine_inverse()
+	var e_v := inv * e_c
+	var s_v := inv * shoulder
+	var z := (s_v - e_v).normalized()
+	var side := (inv.basis * pole)
+	var x := (side - z * side.dot(z)).normalized()
+	if x.length_squared() < 0.5:
+		x = z.cross(Vector3.UP).normalized()
+	upper.transform = Transform3D(Basis(x, z.cross(x), z), e_v)
+
+
+func _ik_elbow(s: Vector3, w: Vector3, pole: Vector3, upper: float, fore: float) -> Vector3:
+	var dv := w - s
+	var d := maxf(dv.length(), 0.0001)
+	var dir := dv / d
+	var dc := clampf(d, absf(upper - fore) + 0.001, upper + fore - 0.001)
+	var a := (upper * upper - fore * fore + dc * dc) / (2.0 * dc)
+	var h := sqrt(maxf(upper * upper - a * a, 0.0))
+	var p := (pole - dir * pole.dot(dir)).normalized()
+	return s + dir * a + p * h
