@@ -191,7 +191,7 @@ def sn_barrel_sup(p):
 
 def sn_scope_compact(p):
     """Short low-power scope: quicker to the eye, less magnification."""
-    tube = cyl(p, v(0, SCOPE_Y, -0.09), v(0, SCOPE_Y, 0.06), 0.0142, 0.002)
+    tube = cyl(p, v(0, SCOPE_Y, -0.14), v(0, SCOPE_Y, 0.06), 0.0142, 0.002)
     bell = smin(cyl(p, v(0, SCOPE_Y, -0.165), v(0, SCOPE_Y, -0.1), 0.0205, 0.003), tube, 0.01)
     eye = smin(cyl(p, v(0, SCOPE_Y, 0.06), v(0, SCOPE_Y, 0.12), 0.0185, 0.003), tube, 0.007)
     saddle = box(p, v(0, SCOPE_Y, -0.01), (0.016, 0.016, 0.014), 0, 0.005)
@@ -580,7 +580,9 @@ def sn_scope(p):
     """A big 5-25x56 tactical scope: objective bell with a sunshade, elevation and
     windage turrets with knurled caps, a parallax knob on the left, a throw
     lever on the zoom ring, and two rings with clamp screws."""
-    tube = cyl(p, v(0, SCOPE_Y, -0.11), v(0, SCOPE_Y, 0.1), 0.0165, 0.002)
+    # The tube runs on into the bell, so the two are one piece (it used to stop
+    # 2 cm short, leaving a gap you could see through from the side).
+    tube = cyl(p, v(0, SCOPE_Y, -0.2), v(0, SCOPE_Y, 0.1), 0.0165, 0.002)
     bell = smin(cyl(p, v(0, SCOPE_Y, -0.245), v(0, SCOPE_Y, -0.13), 0.0295, 0.003), tube, 0.016)
     shade = cyl(p, v(0, SCOPE_Y, -0.27), v(0, SCOPE_Y, -0.24), 0.0292, 0.002)
     eye = smin(cyl(p, v(0, SCOPE_Y, 0.1), v(0, SCOPE_Y, 0.172), 0.0215, 0.003), tube, 0.008)
