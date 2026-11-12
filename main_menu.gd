@@ -777,7 +777,7 @@ func _refresh_editor() -> void:
 	editor_bars["Rückstoß-Kontrolle"].value = clampf(100.0 - float(w["recoil"]) / 4.0 * 80.0, 3.0, 100.0)
 	editor_bars["Stabilität"].value = clampf(100.0 - (float(w.get("sway", 1.0)) - 0.6) * 125.0 - float(w["spread"]) * 6.0, 3.0, 100.0)
 	var note := "%d Schaden   ·   %d Schuss" % [int(damage), int(w["mag_size"])]
-	if editor_weapon == "sniper":
+	if Weapons.ALL[editor_weapon].has("bolt"):
 		note = "%d Schaden   ·   %s" % [int(damage), "Körpertreffer: 1 Schuss" if damage >= 130.0 else "Körpertreffer: 2 Schüsse  ·  Kopf: 1"]
 	if w.get("suppressed", false):
 		note += "   ·   leise"

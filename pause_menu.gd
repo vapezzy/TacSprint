@@ -38,6 +38,7 @@ var music_volume := 0.45
 # Class editor picks for the sniper rifle: slot -> option, and the zoom of each scope.
 var attach := {
 	"sniper": {"griff": "vertikal", "lauf": "standard", "visier": "zielfernrohr", "zoom_zielfernrohr": 8.0, "zoom_kompakt": 4.0},
+	"sniper2": {"lauf": "standard", "visier": "zielfernrohr", "zoom_zielfernrohr": 8.0, "zoom_kompakt": 4.0},
 	"smg": {},
 	"ar": {},
 }

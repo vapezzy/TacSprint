@@ -9,7 +9,7 @@ extends RefCounted
 # when aiming. sight_y / ads_z: where the sight line sits and how far the
 # weapon is held from the eye when aiming. two_handed = false hides the support arm.
 
-const PRIMARY := ["smg", "ar", "sniper"]
+const PRIMARY := ["smg", "ar", "sniper", "sniper2"]
 const SECONDARY := ["pistol", "knife"]
 
 const ALL := {
@@ -33,6 +33,16 @@ const ALL := {
 		"ads_zoom": 0.6, "ads_time": 0.42, "sight_y": 0.078, "ads_z": -0.199,
 		"muzzle": Vector3(0, 0.016, -0.86), "port": Vector3(0.026, 0.02, -0.03),
 		"two_handed": true, "scope": true, "melee": false, "hip_rot": Vector3.ZERO, "flash": 2.2, "flash_bright": 1.8,
+	},
+	# SR-8: a slimmer bolt rifle on the FJ50's layout (same bolt, magazine, barrels
+	# and optics). No vertical grip: the support hand cups the long handguard.
+	"sniper2": {
+		"name": "SR-8", "kind": "Scharfschützengewehr", "damage": 110.0, "forward": 0.04, "scope_zoom": 0.13, "mesh": "sniper2.bin", "sfx": "sniper", "sway": 0.85, "bolt": "sniper_bolt.bin", "mag": "sniper_mag.bin", "mag_size": 5,
+		"interval": 1.1, "auto": false, "recoil": 3.1, "spread": 4.6, "reload": 2.6,
+		"ads_zoom": 0.6, "ads_time": 0.37, "sight_y": 0.078, "ads_z": -0.199,
+		"muzzle": Vector3(0, 0.016, -0.86), "port": Vector3(0.026, 0.02, -0.03),
+		"two_handed": true, "scope": true, "melee": false, "hip_rot": Vector3.ZERO, "flash": 2.0, "flash_bright": 1.7,
+		"plain_hold": true, "hold_offset": Vector3(0, 0.012, 0),
 	},
 	"pistol": {
 		"name": "P9", "kind": "Pistole", "damage": 34.0, "mesh": "pistol.bin", "sfx": "pistol", "mag": "", "mag_size": 15,
@@ -203,6 +213,8 @@ static func groups(id: String) -> Array:
 			return ATTACHMENTS_SMG
 		"ar":
 			return ATTACHMENTS_AR
+		"sniper2":
+			return ATTACHMENTS["sniper"]
 	return ATTACHMENTS.get(id, [])
 
 

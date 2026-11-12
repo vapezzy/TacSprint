@@ -2119,7 +2119,7 @@ func _run_flash_test() -> void:
 		get_tree().quit(0)
 		return
 	if OS.get_cmdline_user_args().has("--snipershot"):
-		menu.set_weapon("primary", "sniper")
+		menu.set_weapon("primary", _test_weapon())
 		menu.set_skin(_test_skin())
 		await _wait(1.0)
 		await _save_view("sniper_fp")
@@ -2160,7 +2160,7 @@ func _run_flash_test() -> void:
 		await _wait(3.5)
 		main_menu.open(false)
 		main_menu.show_tab(1)
-		main_menu.open_editor("sniper")
+		main_menu.open_editor(_test_weapon())
 		for k in 4:
 			await _wait(1.1)
 			await _save_view("sniper_editor_%d" % k)
@@ -2668,3 +2668,12 @@ func _test_skin() -> int:
 		if a.begins_with("--skin="):
 			return int(a.substr(7))
 	return 5
+
+
+
+# --weapon=<id> for the sniper test views (default the FJ50).
+func _test_weapon() -> String:
+	for a in OS.get_cmdline_user_args():
+		if a.begins_with("--weapon="):
+			return a.substr(9)
+	return "sniper"
