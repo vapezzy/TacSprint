@@ -121,6 +121,44 @@ static func cloth(weapon_fov: float) -> ShaderMaterial:
 
 
 # A generated model from the models folder (see tools/sdf.py for the format).
+# A glove with finger bones (tools/make_hand_skins.py): the hand mesh with bone
+# weights, its skin, and per bone [parent, pivot, hinge axis]. Falls back to
+# the plain mesh (bones empty) when there is no .skin file.
+static func hand(file: String) -> Dictionary:
+	if _cache.has("hand:" + file):
+		return _cache["hand:" + file]
+	var plain := mesh(file)
+	var out := {"mesh": plain, "skin": null, "bones": []}
+	var f := FileAccess.open("res://models/" + file.replace(".bin", ".skin"), FileAccess.READ)
+	if f == null or plain == null or f.get_buffer(4).get_string_from_ascii() != "SKN1":
+		_cache["hand:" + file] = out
+		return out
+	var count := f.get_32()
+	var verts := f.get_32()
+	var bones := []
+	var skin := Skin.new()
+	for i in count:
+		var parent := f.get_32()
+		if parent >= 0x80000000:
+			parent -= 0x100000000
+		var pivot := Vector3(f.get_float(), f.get_float(), f.get_float())
+		var hinge := Vector3(f.get_float(), f.get_float(), f.get_float()).normalized()
+		bones.append([parent, pivot, hinge])
+		skin.add_bind(i, Transform3D(Basis.IDENTITY, -pivot))
+	var arrays := plain.surface_get_arrays(0)
+	if (arrays[Mesh.ARRAY_VERTEX] as PackedVector3Array).size() != verts:
+		push_warning("Skin does not match the mesh: " + file)
+		_cache["hand:" + file] = out
+		return out
+	arrays[Mesh.ARRAY_BONES] = f.get_buffer(verts * 16).to_int32_array()
+	arrays[Mesh.ARRAY_WEIGHTS] = f.get_buffer(verts * 16).to_float32_array()
+	var m := ArrayMesh.new()
+	m.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, arrays)
+	out = {"mesh": m, "skin": skin, "bones": bones}
+	_cache["hand:" + file] = out
+	return out
+
+
 static func mesh(file: String) -> ArrayMesh:
 	if _cache.has("mesh:" + file):
 		return _cache["mesh:" + file]

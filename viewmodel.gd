@@ -83,6 +83,18 @@ var _right_give_vel := Vector3.ZERO
 var _last_basis := Basis.IDENTITY
 var _life_t := 0.0
 var _regrip_t := 3.0
+# Finger bones (Assets.hand): each glove has a skeleton, and every digit is
+# turned about its own hinge every frame, so the fingers are never frozen.
+var right_skel: Skeleton3D
+var left_skel: Skeleton3D
+var _right_bones: Array = []
+var _left_bones: Array = []
+var trigger_off := 0.0        # 0 = index finger on the trigger, 1 = laid along the frame (sprint)
+var _trigger := 0.0           # trigger pull after a shot, springs back
+var _squeeze := 0.0           # both hands tighten for a moment on a shot
+var _wave_r := -1.0           # a finger-by-finger regrip running (seconds in), -1 = none
+var _wave_l := -1.0
+var _finger_seed := []
 
 
 func _init() -> void:
@@ -151,6 +163,9 @@ func _init() -> void:
 	laser_beam.visible = false
 	_parent = right_arm
 	right_hand_part = _part("right_hand.bin", cloth)
+	right_skel = Skeleton3D.new()
+	right_hand_part.add_child(right_skel)
+	_skin_hand(true, "right_hand.bin")
 	_part("right_sleeve.bin", cloth)
 	_parent = bolt
 	bolt_part = _part("sniper_bolt.bin", weapon_mat)
@@ -190,6 +205,11 @@ func _init() -> void:
 	mag_part.set_instance_shader_parameter("tone", 0.6)
 	_parent = left_arm
 	left_hand_part = _part("left_hand.bin", cloth)
+	left_skel = Skeleton3D.new()
+	left_hand_part.add_child(left_skel)
+	_skin_hand(false, "left_hand.bin")
+	for i in 10:
+		_finger_seed.append([randf_range(0.0, TAU), randf_range(0.0, TAU), randf_range(0.8, 1.25)])
 	left_sleeve_part = _part("left_sleeve.bin", cloth)
 	_parent = self
 	_build_flash()
@@ -287,7 +307,7 @@ func pose_bolt(t: float) -> void:
 	var on_bolt := 0 if reach <= 0.6 else (2 if bolt_hook else 1)
 	if on_bolt != _right_on_bolt:
 		_right_on_bolt = on_bolt
-		right_hand_part.mesh = Assets.mesh(["right_hand.bin", "right_bolt_hand.bin", "right_bolt_hook_hand.bin"][on_bolt])
+		_skin_hand(true, ["right_hand.bin", "right_bolt_hand.bin", "right_bolt_hook_hand.bin"][on_bolt])
 
 
 # A pose for an arm given in camera space: the arm's reference point `anchor`
@@ -506,6 +526,8 @@ func _build_held_items() -> void:
 func hand_shot(strength: float) -> void:
 	_left_give_vel += Vector3(0.9, -0.5, 0.35) * strength
 	_right_give_vel += Vector3(0.6, 0.0, 0.25) * strength
+	_trigger = 1.0
+	_squeeze = minf(_squeeze + 0.6 * strength, 1.0)
 
 
 # Called every frame after the arms are posed. x: pitch of the hand, y: its
@@ -524,19 +546,26 @@ func hand_life(dt: float) -> void:
 	if _regrip_t <= 0.0:
 		_regrip_t = randf_range(2.5, 6.0)
 		_left_give_vel += Vector3(randf_range(-0.5, 0.5), randf_range(-0.6, 0.6), randf_range(-0.4, 0.4))
+		_wave_l = 0.0
+		if randf() < 0.45:
+			_wave_r = 0.0
 		_right_give_vel += Vector3(randf_range(-0.25, 0.25), randf_range(-0.3, 0.3), 0.0)
 	_left_give_vel += (-_left_give * 140.0 - _left_give_vel * 10.0) * dt
 	_left_give += _left_give_vel * dt
 	_right_give_vel += (-_right_give * 170.0 - _right_give_vel * 11.0) * dt
 	_right_give += _right_give_vel * dt
-	var breathe := sin(_life_t * 1.7) * 0.006 + sin(_life_t * 0.63 + 1.3) * 0.003
-	_apply_give(left_arm, FIST, _left_give + Vector3(breathe, breathe * 0.6, 0.0))
-	_apply_give(right_arm, Vector3(0.0, -0.098, 0.072), _right_give)
+	# Breathing and a slow, separate drift for each arm, so they never move as one block.
+	var breathe := sin(_life_t * 1.7) * 0.02 + sin(_life_t * 0.63 + 1.3) * 0.012
+	var drift_l := Vector3(sin(_life_t * 0.83 + 0.4) * 0.05, sin(_life_t * 1.21 + 2.0) * 0.06, sin(_life_t * 0.57) * 0.04)
+	var drift_r := Vector3(sin(_life_t * 0.71 + 1.9) * 0.03, sin(_life_t * 1.07 + 0.7) * 0.035, 0.0)
+	_apply_give(left_arm, FIST, _left_give + drift_l + Vector3(breathe, breathe * 0.6, 0.0))
+	_apply_give(right_arm, Vector3(0.0, -0.098, 0.072), _right_give + drift_r + Vector3(breathe * 0.5, 0.0, 0.0))
+	_animate_fingers(dt)
 
 
 func _apply_give(arm: Node3D, hand: Vector3, give: Vector3) -> void:
 	var at := arm.transform * hand
-	var turn := Basis(Vector3.RIGHT, give.x * 0.12) * Basis(Vector3.BACK, give.y * 0.12)
+	var turn := Basis(Vector3.RIGHT, give.x * 0.18) * Basis(Vector3.BACK, give.y * 0.18)
 	var shift := Vector3(0.0, give.x * 0.0012, give.z * 0.006)
 	arm.transform = Transform3D(turn, at - turn * at + shift) * arm.transform
 
@@ -573,7 +602,7 @@ func apply_snapshot(a: Dictionary, b: Dictionary, k: float) -> void:
 	var rs: int = b["rs"]
 	if rs != _right_on_bolt:
 		_right_on_bolt = rs
-		right_hand_part.mesh = Assets.mesh(["right_hand.bin", "right_bolt_hand.bin", "right_bolt_hook_hand.bin"][rs])
+		_skin_hand(true, ["right_hand.bin", "right_bolt_hand.bin", "right_bolt_hook_hand.bin"][rs])
 	var items: Array = b["items"]
 	for id: String in right_items:
 		right_items[id].visible = items.has("r" + id)
@@ -590,17 +619,17 @@ func _set_left(state: String) -> void:
 	_left_state = state
 	match state:
 		"grip":
-			left_hand_part.mesh = Assets.mesh("left_hold_hand.bin" if plain_hold else "left_hand.bin")
+			_skin_hand(false, "left_hold_hand.bin" if plain_hold else "left_hand.bin")
 			left_sleeve_part.mesh = Assets.mesh("left_hold_sleeve.bin" if plain_hold else "left_sleeve.bin")
 			left_hand_part.position = hold_offset
 			left_sleeve_part.position = hold_offset
 		"open":
-			left_hand_part.mesh = Assets.mesh("left_open_hand.bin")
+			_skin_hand(false, "left_open_hand.bin")
 			left_sleeve_part.mesh = Assets.mesh("left_sleeve.bin")
 			left_hand_part.position = Vector3.ZERO
 			left_sleeve_part.position = Vector3.ZERO
 		"mag":
-			left_hand_part.mesh = Assets.mesh(mag_hand)
+			_skin_hand(false, mag_hand)
 			left_sleeve_part.mesh = Assets.mesh("left_sleeve.bin")
 			left_hand_part.position = Vector3.ZERO
 			left_sleeve_part.position = Vector3.ZERO
@@ -838,3 +867,71 @@ func _build_flash() -> void:
 		fx_jets.append(jet)
 	fx.visible = false
 	flash_mesh = fx
+
+
+
+# Puts a glove pose on a hand and rebuilds its skeleton from that pose's bones.
+func _skin_hand(right: bool, file: String) -> void:
+	var part := right_hand_part if right else left_hand_part
+	var skel := right_skel if right else left_skel
+	var data := Assets.hand(file)
+	part.mesh = data["mesh"]
+	var bones: Array = data["bones"]
+	if right:
+		_right_bones = bones
+	else:
+		_left_bones = bones
+	if skel == null or bones.is_empty():
+		return
+	skel.clear_bones()
+	for i in bones.size():
+		skel.add_bone("b%d" % i)
+	for i in bones.size():
+		var parent: int = bones[i][0]
+		var pivot: Vector3 = bones[i][1]
+		var base: Vector3 = Vector3.ZERO if parent < 0 else bones[parent][1]
+		if parent >= 0:
+			skel.set_bone_parent(i, parent)
+		skel.set_bone_rest(i, Transform3D(Basis.IDENTITY, pivot - base))
+	skel.reset_bone_poses()
+	part.skin = data["skin"]
+	part.skeleton = part.get_path_to(skel)
+
+
+# Every digit turned about its own hinge (radians, + = curl, - = open). Bones:
+# 0 palm, then 3 per digit: index, middle, ring, little, thumb.
+#   - each finger breathes on its own, at its own pace, so no two look alike
+#   - the trigger finger pulls on a shot and lies along the frame in a sprint
+#   - a shot tightens the grip for a moment
+#   - now and then a hand re-grips: the fingers lift and close one after another
+func _animate_fingers(dt: float) -> void:
+	_trigger = move_toward(_trigger, 0.0, dt / 0.11)
+	_squeeze = move_toward(_squeeze, 0.0, dt / 0.25)
+	if _wave_r >= 0.0:
+		_wave_r = _wave_r + dt if _wave_r < 0.6 else -1.0
+	if _wave_l >= 0.0:
+		_wave_l = _wave_l + dt if _wave_l < 0.7 else -1.0
+	_pose_digits(right_skel, _right_bones, true)
+	_pose_digits(left_skel, _left_bones, false)
+
+
+func _pose_digits(skel: Skeleton3D, bones: Array, right: bool) -> void:
+	if skel == null or bones.size() < 16:
+		return
+	var wave := _wave_r if right else _wave_l
+	for d in 5:
+		var seed: Array = _finger_seed[d + (0 if right else 5)]
+		var sp: float = seed[2]
+		var amp := 0.035 if right else 0.05
+		var idle := sin(_life_t * 0.9 * sp + seed[0]) * amp + sin(_life_t * 2.3 * sp + seed[1]) * amp * 0.45 - amp * 0.4
+		var a := idle + _squeeze * (0.05 if d < 4 else 0.03)
+		if right and d == 0:
+			a += _trigger * 0.2 - trigger_off * 0.55
+		if wave >= 0.0:
+			var k := clampf((wave - d * 0.055) / 0.32, 0.0, 1.0)
+			a -= sin(k * PI) * (0.2 if right else 0.32) * (0.6 if d == 4 else 1.0)
+		var share := [1.0, 0.75, 0.5]
+		for j in 3:
+			var b := 1 + d * 3 + j
+			var hinge: Vector3 = bones[b][2]
+			skel.set_bone_pose_rotation(b, Quaternion(hinge, a * share[j]))

@@ -2081,6 +2081,23 @@ func _run_flash_test() -> void:
 			print("RELOADTEST ", wid, " yy-cancel: reloading_now=", player.reloading > 0.0, " slot ", slot_before, "->", player.slot, " ammo=", player.ammo, " swap_t=", player.swap_t)
 		get_tree().quit(0)
 		return
+	if OS.get_cmdline_user_args().has("--fingershots"):
+		# Finger bones: a regrip wave on both hands frame by frame, then a shot.
+		menu.set_weapon("primary", "ar")
+		await _wait(1.2)
+		await _save_view("fing_0")
+		player.vmodel._wave_l = 0.0
+		player.vmodel._wave_r = 0.0
+		for k in 4:
+			await _wait(0.08)
+			await _save_view("fing_w%d" % k)
+		await _wait(0.6)
+		player.ai = {"fire": true}
+		await _wait(0.03)
+		await _save_view("fing_shot")
+		player.ai = {}
+		get_tree().quit(0)
+		return
 	if OS.get_cmdline_user_args().has("--hipshots"):
 		for wid: String in ["smg", "ar", "sniper"]:
 			menu.set_weapon("primary", wid)

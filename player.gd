@@ -1848,6 +1848,7 @@ func _update_view(dt: float) -> void:
 	vmodel.left_item = tactical
 	vmodel.pose_left(dt, 0.0 if w["scope"] else p.left_free, bob_t, inspect_p, drift, reload_r)
 	vmodel.pose_right_throw(lethal_t, lethal)
+	vmodel.trigger_off = sprint_amt
 	vmodel.hand_life(dt)
 	# Bolt-action reload: the right hand moves forward onto the fore-end meanwhile.
 	if w.has("bolt") and reload_r > 0.0 and reload_style == 0:
