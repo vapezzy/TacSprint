@@ -22,7 +22,7 @@ const Weapons := preload("res://weapons.gd")
 
 const SAVE := "user://settings.cfg"
 const DEFAULTS := {"fov": 100.0, "weapon_zoom": 0.0, "sensitivity": 1.0}
-const SKINS := ["Standard", "Wüste", "Wald", "Gold", "Arktis", "DAMATTER"]
+const SKINS := ["Standard", "Wüste", "Wald", "Gold", "Arktis", "DAMATTER", "PRISMA"]
 
 var enabled := true        # false in the automated tests, so Esc and saved settings stay out of the way
 var is_open := false

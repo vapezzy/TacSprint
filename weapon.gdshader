@@ -14,7 +14,7 @@ uniform sampler2D grime : filter_linear_mipmap_anisotropic, repeat_enable;
 uniform sampler2D scratch_d : filter_linear_mipmap_anisotropic, repeat_enable;
 uniform sampler2D scratch_n : hint_normal, filter_linear_mipmap_anisotropic, repeat_enable;
 uniform sampler2D camo : source_color, filter_linear_mipmap_anisotropic, repeat_enable;
-// 0 black, 1 desert, 2 woodland, 3 gold, 4 arctic, 5 DAMATTER
+// 0 black, 1 desert, 2 woodland, 3 gold, 4 arctic, 5 DAMATTER, 6 PRISMA
 uniform int skin = 0;
 // Attachments (barrel, scope, muzzle, grip, magazine ...) wear the camo a shade darker.
 instance uniform float tone = 1.0;
@@ -67,6 +67,65 @@ vec3 damatter(vec3 p, vec3 w, float t, out float glow, out float layer) {
 	float pulse = 0.55 + 0.45 * sin(t * 2.2 - p.z * 9.0);
 	glow = seam * (0.4 + 0.6 * cloud) * (0.5 + pulse) + star;
 	return mix(deep, steel, steel_line);
+}
+
+// PRISMA: a mastery camo of cut crystal. The surface breaks into shards; each
+// shard is a facet that catches the light at its own angle, so the colours run
+// through a prismatic spectrum (deep blue, violet, magenta, gold, cyan) as you
+// turn the weapon. The shard edges are lit seams, light flows slowly across the
+// facets and points of light flare and fade.
+vec3 prism_pal(float h) {
+	vec3 c = 0.5 + 0.5 * cos(6.28318 * (h + vec3(0.0, 0.33, 0.67)));
+	// Push it towards the cool end (blue, violet, cyan) with flashes of magenta and gold.
+	c = mix(c, c * vec3(0.75, 0.85, 1.25), 0.5);
+	return pow(c, vec3(1.6));
+}
+
+vec3 prisma(vec3 p, vec3 view_n, float facing, float t, out float glow) {
+	vec3 q = p * 95.0;
+	vec3 base = floor(q);
+	float d1 = 9.0;
+	float d2 = 9.0;
+	vec3 best = base;
+	for (int z = -1; z <= 1; z++) {
+		for (int y = -1; y <= 1; y++) {
+			for (int x = -1; x <= 1; x++) {
+				vec3 c = base + vec3(float(x), float(y), float(z));
+				vec3 o = vec3(dm_hash(c.xy + c.z * 3.1), dm_hash(c.yz + c.x * 5.7), dm_hash(c.zx + c.y * 9.3));
+				float dd = length(q - c - o);
+				if (dd < d1) {
+					d2 = d1;
+					d1 = dd;
+					best = c;
+				} else if (dd < d2) {
+					d2 = dd;
+				}
+			}
+		}
+	}
+	float r1 = dm_hash(best.xy + best.z * 1.7);
+	float r2 = dm_hash(best.yz + best.x * 2.3);
+	// Each facet tilts the light: the hue depends on the view angle, the facet
+	// and a slow drift along the weapon.
+	float hue = r1 * 0.8 + facing * 2.2 + r2 * view_n.x * 0.8 + view_n.y * 0.5 + p.z * 2.0 - t * 0.08;
+	vec3 col = prism_pal(hue);
+	// Darker facets between bright ones, so it reads as cut glass, not paint.
+	float lit = mix(0.04, 1.15, pow(r2, 2.2)) * mix(0.5, 1.0, facing);
+	col *= lit;
+	col = mix(vec3(0.004, 0.005, 0.02), col, 0.9);
+	// Fine glitter inside the crystal.
+	vec2 gg = (p.zy + p.x * 0.4) * 900.0;
+	float glitter = step(0.985, dm_hash(floor(gg))) * smoothstep(0.35, 0.0, length(fract(gg) - 0.5))
+			* (0.5 + 0.5 * sin(t * 4.0 + dm_hash(floor(gg) + 3.0) * 50.0));
+	// Seams along the shard edges.
+	float seam = 1.0 - smoothstep(0.0, 0.035, d2 - d1);
+	// A band of light sweeping over the facets.
+	float sweep = smoothstep(0.85, 1.0, sin(p.z * 9.0 + p.y * 6.0 - t * 1.6) * 0.5 + 0.5);
+	// Glints: some facets flare now and then.
+	float flare = step(0.86, r1) * pow(0.5 + 0.5 * sin(t * 2.5 + r2 * 60.0), 6.0);
+	glow = seam * 0.25 + sweep * 0.3 * r2 + flare * 1.2 + glitter * 1.5;
+	col = mix(col, prism_pal(hue + 0.5) * 0.6, seam * 0.7);
+	return col;
 }
 
 void vertex() {
@@ -192,6 +251,15 @@ void fragment() {
 		metal = mix(0.5, 1.0, layer);
 		rough = mix(0.05, 0.1, fine);
 		glow_col = vec3(0.45, 0.2, 1.0) * glow * 0.9 * mix(1.0, tone, 0.5);
+	}
+	if (skin == 6 && zone < 1.5) {
+		vec3 vn = normalize((VIEW_MATRIX * MODEL_MATRIX * vec4(n, 0.0)).xyz);
+		float facing = clamp(dot(vn, VIEW), 0.0, 1.0);
+		float glow;
+		albedo = prisma(op, vn, facing, TIME * CAMO_SPEED, glow);
+		metal = 1.0;
+		rough = mix(0.04, 0.09, fine);
+		glow_col = mix(vec3(0.35, 0.6, 1.0), prism_pal(facing + 0.3), 0.5) * glow * 0.8 * mix(1.0, tone, 0.5);
 	}
 	// Camos are polished to a high gloss: a clear coat over the paint, dust and
 	// rubbed edges toned down.
