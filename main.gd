@@ -703,6 +703,16 @@ func _build_hud() -> void:
 	scope_cam = Camera3D.new()
 	scope_cam.cull_mask = 1
 	scope_cam.near = 0.2
+	# Its own eye adaptation, quick: the picture is only drawn while scoped, so
+	# with the slow shared one it came up washed out white every time.
+	var scope_attr := CameraAttributesPractical.new()
+	scope_attr.auto_exposure_enabled = true
+	scope_attr.auto_exposure_scale = AUTO_EXPOSURE_GREY * 0.78
+	scope_attr.auto_exposure_speed = 30.0
+	scope_attr.auto_exposure_min_sensitivity = 60.0
+	scope_attr.auto_exposure_max_sensitivity = 220.0
+	scope_cam.attributes = scope_attr
+	_scope_env.call_deferred()
 	scope_vp.add_child(scope_cam)
 	scope = ColorRect.new()
 	scope.set_anchors_preset(Control.PRESET_FULL_RECT)
@@ -741,10 +751,32 @@ void fragment() {
 	c += vec3(0.24, 0.23, 0.21) * speck * 0.5 + vec3(0.06) * smudge * 0.6;
 		// Only a fast swing of the rifle throws a shadow across the lens.
 	c *= 1.0 - 0.95 * smoothstep(rad * 0.72, rad * 1.02, length(d + flick * rad));
-	c *= 1.0 - 0.3 * smoothstep(rad * 0.55, rad, r);
-	float line = max(step(abs(d.x), 0.0008), step(abs(d.y), 0.0008));
-	float thick = max(step(abs(d.x), 0.003) * step(rad * 0.42, abs(d.y)), step(abs(d.y), 0.003) * step(rad * 0.42, abs(d.x)));
-	c = mix(c, vec3(0.0), max(line, thick));
+	c *= 1.0 - 0.18 * smoothstep(rad * 0.6, rad, r);
+	// Reticle, in units of the lens radius: thick posts from the rim, a fine
+	// cross in the middle with stadia marks along it (longer every fifth), and
+	// a small lit centre dot. Edges are soft over about a pixel.
+	vec2 u = d / rad;
+	float px = SCREEN_PIXEL_SIZE.y / rad;
+	float fine_w = max(0.0016, px * 0.6);
+	float fine = max(1.0 - smoothstep(fine_w, fine_w + px, abs(u.x)), 1.0 - smoothstep(fine_w, fine_w + px, abs(u.y)));
+	fine *= step(0.012, max(abs(u.x), abs(u.y)));           // a gap round the dot
+	float post_w = 0.009;
+	float posts = max((1.0 - smoothstep(post_w, post_w + px, abs(u.x))) * step(0.5, abs(u.y)),
+			(1.0 - smoothstep(post_w, post_w + px, abs(u.y))) * step(0.5, abs(u.x)));
+	// Taper where the posts start.
+	posts *= smoothstep(0.5, 0.53, max(abs(u.x), abs(u.y)));
+	float marks = 0.0;
+	for (int i = 1; i <= 12; i++) {
+		float at = float(i) * 0.04;
+		float len = (i % 5 == 0) ? 0.03 : 0.016;
+		marks = max(marks, (1.0 - smoothstep(fine_w, fine_w + px, abs(abs(u.x) - at))) * step(abs(u.y), len) * step(abs(u.x), 0.49));
+		marks = max(marks, (1.0 - smoothstep(fine_w, fine_w + px, abs(abs(u.y) - at))) * step(abs(u.x), len) * step(abs(u.y), 0.49));
+	}
+	c = mix(c, vec3(0.01), max(max(fine, posts), marks));
+	float dot_r = length(u);
+	c = mix(c, vec3(1.0, 0.16, 0.08) * 1.6, 1.0 - smoothstep(0.006, 0.006 + px, dot_r));
+	// The tube's inner wall: a thin dark edge right at the rim.
+	c *= 1.0 - 0.85 * smoothstep(rad * 0.94, rad * 0.995, r);
 	// The black ring inside the lens while the eye is still finding it.
 	c *= 1.0 - (1.0 - settle) * 0.97 * smoothstep(rad * 0.3, rad * 0.8, r);
 	COLOR = vec4(c, inside);
@@ -2677,3 +2709,19 @@ func _test_weapon() -> String:
 		if a.begins_with("--weapon="):
 			return a.substr(9)
 	return "sniper"
+
+
+
+# The scope's own copy of the sky and air. Volumetric fog builds up over
+# several frames and the scope picture only exists while scoped, so it came up
+# as a milky white veil; through good glass the view is clear, so the scope
+# leaves volumetric fog out and keeps only a light aerial haze.
+func _scope_env() -> void:
+	for n in get_children():
+		if n is WorldEnvironment and (n as WorldEnvironment).environment != null:
+			var e: Environment = (n as WorldEnvironment).environment.duplicate()
+			e.volumetric_fog_enabled = false
+			e.fog_density *= 0.5
+			e.fog_height_density *= 0.5
+			scope_cam.environment = e
+			return
