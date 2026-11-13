@@ -48,6 +48,8 @@ var bomb_at := Vector3.ZERO
 var bomb_site := -1
 var bomb_t := 0.0
 var plant_p := 0.0
+var _key_beep: AudioStreamPlayer
+var _last_key := -1
 var defuse_p := 0.0
 var _beep := 0.0
 var last_kill := {}            # {"killer": -1 player / bot index, "victim": -2 player / bot index}
@@ -178,6 +180,7 @@ func _start_round() -> void:
 	timer = PREP_TIME
 	plant_p = 0.0
 	defuse_p = 0.0
+	player.set("plant_t", -1.0)
 	bomb_site = -1
 	target_site = randi() % 2
 	last_kill = {}
@@ -280,6 +283,16 @@ func _play_round(dt: float) -> void:
 					return
 		if not planting:
 			plant_p = 0.0
+		# The player's own plant drives the first-person animation, with a beep per key.
+		var mine: bool = planting and carrier == player
+		player.set("plant_t", plant_p / PLANT_TIME if mine else -1.0)
+		if mine:
+			var key := int(clampf((plant_p / PLANT_TIME - 0.18) / 0.62, 0.0, 0.999) * 8.0)
+			if plant_p / PLANT_TIME > 0.18 and key != _last_key:
+				_last_key = key
+				_key_beep.play()
+		else:
+			_last_key = -1
 	else:
 		# Defusing: a defender at the bomb, still, for DEFUSE_TIME.
 		var defusing := false
@@ -353,6 +366,7 @@ func _site_at(pos: Vector3) -> int:
 
 func _plant(site: int) -> void:
 	phase = "planted"
+	player.set("plant_t", -1.0)
 	bomb_site = site
 	bomb_at = carrier.global_position
 	bomb.global_position = bomb_at
@@ -513,6 +527,11 @@ func _make_bomb() -> Node3D:
 	lamp.omni_range = 1.6
 	lamp.position = Vector3(0, 0.2, 0)
 	root.add_child(lamp)
+	_key_beep = AudioStreamPlayer.new()
+	_key_beep.stream = _beep_sound()
+	_key_beep.pitch_scale = 1.35
+	_key_beep.volume_db = -8.0
+	add_child(_key_beep)
 	_beeper = AudioStreamPlayer3D.new()
 	_beeper.stream = _beep_sound()
 	_beeper.unit_size = 4.0

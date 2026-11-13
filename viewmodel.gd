@@ -220,6 +220,7 @@ func _init() -> void:
 	_parent = self
 	_build_flash()
 	_build_held_items()
+	_build_plant_rig()
 	right_upper = _part("upper_sleeve.bin", cloth)
 	left_upper = _part("upper_sleeve.bin", cloth)
 	for u: MeshInstance3D in [right_upper, left_upper]:
@@ -582,7 +583,7 @@ func _apply_give(arm: Node3D, hand: Vector3, give: Vector3) -> void:
 
 # The weapon's own field of view in degrees (vertical).
 func set_fov(degrees: float) -> void:
-	for m: ShaderMaterial in [weapon_mat, cloth, flash_mat] + beam_mats:
+	for m: ShaderMaterial in [weapon_mat, cloth, flash_mat] + beam_mats + _device_mats:
 		m.set_shader_parameter("vm_fov", degrees)
 
 
@@ -940,7 +941,7 @@ func _pose_digits(skel: Skeleton3D, bones: Array, right: bool) -> void:
 		var idle := sin(_life_t * 0.9 * sp + seed[0]) * amp + sin(_life_t * 2.3 * sp + seed[1]) * amp * 0.45 - amp * 0.4
 		var a := idle + _squeeze * (0.05 if d < 4 else 0.03)
 		if right and d == 0:
-			a += _trigger * 0.2 - trigger_off * 0.55
+			a += _trigger * 0.2 - (1.0 if _plant_on else trigger_off) * 0.55
 		if wave >= 0.0:
 			var k := clampf((wave - d * 0.055) / 0.32, 0.0, 1.0)
 			a -= sin(k * PI) * (0.2 if right else 0.32) * (0.6 if d == 4 else 1.0)
@@ -1015,3 +1016,151 @@ func _ik_elbow(s: Vector3, w: Vector3, pole: Vector3, upper: float, fore: float)
 	var h := sqrt(maxf(upper * upper - a * a, 0.0))
 	var p := (pole - dir * pole.dot(dir)).normalized()
 	return s + dir * a + p * h
+
+
+
+# --- planting the bomb ---------------------------------------------------------------
+# While the bomb is planted the weapon goes away and both hands bring the bomb
+# out in front: the left hand holds it from underneath, the right index finger
+# types the arming code on the keypad (each key lights up, a bar fills on the
+# little screen), the red lamp starts to blink, and the bomb is set down.
+# pose_plant(k): k = 0..1 through the plant, below 0 = not planting.
+
+const PLANT_KEYS := 8
+const PLANT_AT := Vector3(0.0, -0.13, -0.4)        # the bomb, in camera space
+var plant_rig: Node3D
+var _plant_keys: Array[ShaderMaterial] = []
+var _plant_bars: Array[ShaderMaterial] = []
+var _plant_led: ShaderMaterial
+var _plant_on := false
+var _device_mats: Array[ShaderMaterial] = []
+
+
+func _device_mat(color: Color, rough := 0.6, metal := 0.0, glow := Color.BLACK, energy := 0.0) -> ShaderMaterial:
+	var m := ShaderMaterial.new()
+	m.shader = load("res://device.gdshader")
+	m.set_shader_parameter("albedo", color)
+	m.set_shader_parameter("roughness", rough)
+	m.set_shader_parameter("metallic", metal)
+	m.set_shader_parameter("glow", glow)
+	m.set_shader_parameter("glow_energy", energy)
+	m.set_shader_parameter("vm_fov", 55.0)
+	_device_mats.append(m)
+	return m
+
+
+func _device_box(parent: Node3D, size: Vector3, at: Vector3, mat: Material) -> MeshInstance3D:
+	var b := BoxMesh.new()
+	b.size = size
+	var m := MeshInstance3D.new()
+	m.mesh = b
+	m.material_override = mat
+	m.position = at
+	m.layers = 2
+	m.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	m.extra_cull_margin = 4.0
+	parent.add_child(m)
+	return m
+
+
+# The bomb: a rugged case with a keypad, a small screen, a red lamp, a stubby
+# antenna and two straps. Its top faces up (+Y), the keypad towards the player (+Z).
+func _build_plant_rig() -> void:
+	plant_rig = Node3D.new()
+	plant_rig.visible = false
+	add_child(plant_rig)
+	var case_mat := _device_mat(Color(0.22, 0.24, 0.17), 0.7)
+	var dark := _device_mat(Color(0.05, 0.05, 0.05), 0.5)
+	var metal := _device_mat(Color(0.5, 0.5, 0.5), 0.35, 0.9)
+	var strap := _device_mat(Color(0.12, 0.11, 0.09), 0.9)
+	_device_box(plant_rig, Vector3(0.24, 0.075, 0.17), Vector3(0, 0, 0), case_mat)
+	_device_box(plant_rig, Vector3(0.25, 0.012, 0.18), Vector3(0, -0.03, 0), dark)
+	for x: float in [-0.07, 0.07]:
+		_device_box(plant_rig, Vector3(0.025, 0.08, 0.178), Vector3(x, 0.002, 0), strap)
+	# Keypad: 3 x 4 keys on the top, towards the player.
+	_device_box(plant_rig, Vector3(0.09, 0.006, 0.105), Vector3(0.035, 0.04, 0.02), dark)
+	for row in 4:
+		for col in 3:
+			var key := _device_mat(Color(0.32, 0.33, 0.3), 0.6, 0.0, Color(0.4, 1.0, 0.45), 0.0)
+			_device_box(plant_rig, Vector3(0.022, 0.008, 0.019), Vector3(0.008 + col * 0.027, 0.045, -0.015 + row * 0.024), key)
+			_plant_keys.append(key)
+	# Screen with a row of bars that fill as the code goes in.
+	_device_box(plant_rig, Vector3(0.075, 0.006, 0.045), Vector3(-0.06, 0.04, 0.035), _device_mat(Color(0.02, 0.06, 0.03), 0.2, 0.0, Color(0.1, 0.4, 0.15), 0.6))
+	for i in PLANT_KEYS:
+		var bar := _device_mat(Color(0.02, 0.06, 0.03), 0.2, 0.0, Color(0.5, 1.0, 0.55), 0.0)
+		_device_box(plant_rig, Vector3(0.006, 0.004, 0.02), Vector3(-0.088 + i * 0.008, 0.044, 0.035), bar)
+		_plant_bars.append(bar)
+	# Red lamp, antenna, a toggle switch.
+	_plant_led = _device_mat(Color(0.3, 0.02, 0.02), 0.3, 0.0, Color(1.0, 0.1, 0.05), 0.0)
+	_device_box(plant_rig, Vector3(0.014, 0.012, 0.014), Vector3(-0.09, 0.045, -0.05), _plant_led)
+	var ant := _device_box(plant_rig, Vector3(0.008, 0.11, 0.008), Vector3(0.1, 0.09, -0.065), dark)
+	ant.rotation.z = -0.25
+	_device_box(plant_rig, Vector3(0.012, 0.02, 0.012), Vector3(-0.06, 0.045, -0.05), metal)
+
+
+func pose_plant(k: float) -> void:
+	var on := k >= 0.0
+	if on != _plant_on:
+		_plant_on = on
+		plant_rig.visible = on
+		# The weapon goes away while the hands are busy, and comes back as it was.
+		var parts: Array = [gun_part, barrel_part, optic_part, mag, bolt, dot_part, ring_part, laser_beam, chamber_round]
+		parts.append_array(extra_parts)
+		if on:
+			_hidden_for_plant.clear()
+			for n: Node3D in parts:
+				if n != null and n.visible:
+					_hidden_for_plant.append(n)
+					n.visible = false
+			_skin_hand(false, "left_open_hand.bin")
+			_left_state = "plant"
+		else:
+			for n: Node3D in _hidden_for_plant:
+				n.visible = true
+			_hidden_for_plant.clear()
+			_left_state = ""
+			_set_left("grip")
+	if not on:
+		return
+	# Timeline: out (0-0.14), typing (0.18-0.8), armed (0.8-0.88), set down (0.88-1).
+	var out := smoothstep(0.0, 0.14, k)
+	var down := smoothstep(0.88, 1.0, k)
+	var at := PLANT_AT + Vector3(0, -0.35 * (1.0 - out) - 0.12 * down, 0.06 * (1.0 - out) - 0.04 * down)
+	var tilt := Basis(Vector3.RIGHT, deg_to_rad(38.0 - 20.0 * down))
+	plant_rig.transform = transform.affine_inverse() * Transform3D(tilt, at)
+	# Which key is being pressed, and how far down the finger is.
+	var typing := clampf((k - 0.18) / 0.62, 0.0, 1.0)
+	var press := int(typing * PLANT_KEYS)
+	var phase := fmod(typing * PLANT_KEYS, 1.0)
+	var dip := sin(phase * PI) if k > 0.18 and k < 0.8 else 0.0
+	var key_order := [4, 1, 5, 0, 2, 7, 3, 8]
+	var key: int = key_order[mini(press, PLANT_KEYS - 1)]
+	for i in _plant_keys.size():
+		_plant_keys[i].set_shader_parameter("glow_energy", 2.5 if (i == key and dip > 0.5) else 0.0)
+	for i in _plant_bars.size():
+		_plant_bars[i].set_shader_parameter("glow_energy", 2.0 if i < press or k >= 0.8 else 0.0)
+	var blink := k >= 0.8 and fmod(k * 30.0, 1.0) < 0.5
+	_plant_led.set_shader_parameter("glow_energy", 4.0 if blink else 0.0)
+	# Left hand under the bomb, palm up.
+	# Left hand: palm flat against the bomb's left side, fingers forward.
+	var left_turn := Basis(Vector3.BACK, deg_to_rad(-12.0))
+	left_arm.transform = _cam_pose(at + tilt * Vector3(-0.128, -0.005, 0.0), tilt * left_turn, Vector3(-0.035, -0.07, -0.14))
+	# Right hand above the keypad, index finger straight and pointing down at the key.
+	var row := key / 3
+	var col := key % 3
+	var key_at := Vector3(0.008 + col * 0.027, 0.05, -0.015 + row * 0.024)
+	var hover := 0.035 * (1.0 - dip) + 0.004
+	# Back of the hand up, the straight index finger angled down onto the key.
+	var right_turn := Basis(Vector3.RIGHT, deg_to_rad(-25.0)) * Basis(Vector3.UP, deg_to_rad(40.0)) * Basis(Vector3.BACK, deg_to_rad(80.0))
+	var tip := tilt * (key_at + Vector3(0, hover, 0)) + at
+	if k < 0.16 or k > 0.86:
+		tip = at + tilt * Vector3(0.12, 0.08, 0.1)
+	right_arm.transform = _cam_pose(tip, tilt * right_turn, RIGHT_INDEX_TIP)
+	trigger_off = 1.0
+
+
+# The right glove's index fingertip with the finger straightened (trigger_off = 1).
+const RIGHT_INDEX_TIP := Vector3(0.026, -0.045, -0.03)
+
+
+var _hidden_for_plant: Array[Node3D] = []

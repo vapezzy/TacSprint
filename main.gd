@@ -2226,6 +2226,21 @@ func _run_flash_test() -> void:
 			await _save_view(o[2])
 		get_tree().quit(0)
 		return
+	if OS.get_cmdline_user_args().has("--plantshot"):
+		# The planting animation, frame by frame (plant_t driven by hand here).
+		menu.set_weapon("primary", "ar")
+		await _wait(1.0)
+		var k := 0
+		for t: float in [0.05, 0.12, 0.25, 0.32, 0.5, 0.78, 0.84, 0.95]:
+			player.plant_t = t
+			await _wait(0.6)
+			await _save_view("plant_%d" % k)
+			k += 1
+		player.plant_t = -1.0
+		await _wait(0.5)
+		await _save_view("plant_after")
+		get_tree().quit(0)
+		return
 	if OS.get_cmdline_user_args().has("--privateshot"):
 		hud.visible = false
 		main_menu.open()

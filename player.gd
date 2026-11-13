@@ -74,6 +74,7 @@ const INSPECT_YAW := 75.0
 
 var ai_enabled := false
 var ai := {}
+var plant_t := -1.0            # 0-1 while planting the bomb (set by sd_mode.gd), -1 otherwise
 var held := {}
 var prev := {}
 var move := Vector2.ZERO
@@ -1239,7 +1240,7 @@ func _update_weapon(dt: float) -> void:
 		if tactical_t >= 1.0:
 			tactical_t = 0.0
 	throw_t = maxf(lethal_t, tactical_t)
-	var ready := sprint_amt < 0.05 and tac_amt < 0.05 and reloading <= 0.0 and not mantling and inspect_p < 0.3 and not busy and bolt_t == 0.0 and throw_t == 0.0
+	var ready := sprint_amt < 0.05 and tac_amt < 0.05 and reloading <= 0.0 and not mantling and inspect_p < 0.3 and not busy and bolt_t == 0.0 and throw_t == 0.0 and plant_t < 0.0
 	var trigger: bool = held["fire"] if w["auto"] else _just("fire")
 	if w["melee"]:
 		if trigger and ready and fire_cd <= 0.0:
@@ -1856,6 +1857,8 @@ func _update_view(dt: float) -> void:
 	# Bolt-action reload: the right hand moves forward onto the fore-end meanwhile.
 	if w.has("bolt") and reload_r > 0.0 and reload_style == 0:
 		vmodel.pose_right_reload(smoothstep(0.0, 0.16, reload_r) * (1.0 - smoothstep(0.84, 1.0, reload_r)))
+	# Planting the bomb (sd_mode.gd sets plant_t): the hands take over.
+	vmodel.pose_plant(plant_t)
 
 	# Legs: they point where the body travels in a slide, even if you look elsewhere.
 	var turn := 0.0
