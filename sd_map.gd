@@ -17,7 +17,8 @@ extends "res://arena.gd"
 
 const SITE_NAMES := ["A", "B"]
 const SITE_RADIUS := 3.2
-const MAP_NAMES := {"hafen": "Hafen", "raffinerie": "Raffinerie", "altstadt": "Altstadt"}
+const MAP_NAMES := {"hafen": "Hafen", "raffinerie": "Raffinerie", "altstadt": "Altstadt", "waldrand": "Waldrand"}
+const Forest := preload("res://forest.gd")
 
 static var current := "raffinerie"
 static var SD_BOUNDS := Rect2(-24.0, -34.0, 48.0, 68.0)
@@ -25,6 +26,9 @@ static var SITES: Array = [Vector3(-15.0, 0.0, -24.0), Vector3(15.0, 0.0, -24.0)
 static var ATTACK_SPAWN := Vector3(0.0, 0.05, 30.5)
 static var DEFEND_SPAWN := Vector3(0.0, 0.05, -30.5)
 static var NAV: Dictionary = {}
+# The edge of the play area as (x, z) points, for maps whose edge is not a wall;
+# empty for the walled maps. sd_mode.gd warns anyone who walks out of it.
+static var BOUNDARY: Array = []
 
 # [length, x, z, yaw, level, paint, open]
 const HAFEN_LAYOUT := [
@@ -93,6 +97,8 @@ func _ready() -> void:
 		_build_refinery()
 	elif current == "altstadt":
 		_build_town()
+	elif current == "waldrand":
+		_build_wald()
 	else:
 		_build_harbour()
 	for i in SITES.size():
@@ -156,6 +162,15 @@ func _far_stacks() -> void:
 # Footprints for the minimap: [centre, half length, half width, yaw, stacked]
 static func map_boxes() -> Array:
 	var out := []
+	if current == "waldrand":
+		for k: Array in WALD_HOUSES:
+			out.append([Vector2(k[0], k[1]), float(k[2]) / 2.0, float(k[3]) / 2.0, 0.0, true])
+		out.append([Vector2((WALD_HALL["x0"] + WALD_HALL["x1"]) / 2.0, (WALD_HALL["z0"] + WALD_HALL["z1"]) / 2.0),
+				(WALD_HALL["x1"] - WALD_HALL["x0"]) / 2.0, (WALD_HALL["z1"] - WALD_HALL["z0"]) / 2.0, 0.0, true])
+		var a: Vector2 = WALD_WALL[0]
+		var b: Vector2 = WALD_WALL[1]
+		out.append([(a + b) / 2.0, a.distance_to(b) / 2.0, 0.2, -(b - a).angle(), true])
+		return out
 	if current == "altstadt":
 		for w: Array in ALT_WALLS:
 			var a := Vector2(w[0], w[1])
@@ -185,7 +200,15 @@ static func map_boxes() -> Array:
 
 static func use(id: String) -> void:
 	current = id if MAP_NAMES.has(id) else "raffinerie"
-	if current == "altstadt":
+	BOUNDARY = []
+	if current == "waldrand":
+		SD_BOUNDS = Rect2(-25.0, -35.0, 50.0, 70.0)
+		SITES = [Vector3(-14.5, 0.0, 6.5), Vector3(11.75, 0.0, -10.0)]
+		ATTACK_SPAWN = Vector3(15.25, 0.05, 26.0)
+		DEFEND_SPAWN = Vector3(-5.5, 0.05, -19.5)
+		NAV = WALD_NAV
+		BOUNDARY = WALD_BOUNDARY
+	elif current == "altstadt":
 		SD_BOUNDS = Rect2(-23.0, -31.0, 46.0, 62.0)
 		SITES = [Vector3(-15.5, 0.0, -18.0), Vector3(15.5, 0.0, -18.0)]
 		ATTACK_SPAWN = Vector3(0.0, 0.05, 27.5)
@@ -604,3 +627,270 @@ func _build_town() -> void:
 		var arch := BoxMesh.new()
 		arch.size = Vector3(1.6, 2.6, 0.05)
 		_mesh(arch, hole, Transform3D(b, Vector3(-4.0, 19.0, -42.0) + b * Vector3(0, 0, 2.02)))
+
+
+
+# --- "Waldrand" -----------------------------------------------------------------------------
+# Drawn by the player: a village clearing in the woods. Two roads run through
+# it from north to south and on out into the forest; three buildings on the
+# west side, the middle one open to walk through (in from the south, out on its
+# right onto the road); a wall with an open door closes site A to the south.
+# The white line of the sketch is BOUNDARY: outside it is forest, and anyone who
+# walks out is told to come back (sd_mode.gd).
+
+const WALD_BOUNDARY := [
+	Vector2(-22.75, -17.5), Vector2(-18.75, -22.5), Vector2(-8.75, -22.5), Vector2(-5.25, -24.5), Vector2(-1.25, -32.75),
+	Vector2(6.25, -33.9), Vector2(16.25, -31.25), Vector2(21.75, -28.5), Vector2(22.75, -24.5), Vector2(22.5, -12.0),
+	Vector2(23.75, 3.0), Vector2(22.75, 18.0), Vector2(19.75, 28.0), Vector2(17.5, 33.5), Vector2(10.25, 32.5),
+	Vector2(6.25, 28.5), Vector2(1.25, 29.5), Vector2(-6.25, 34.0), Vector2(-16.25, 33.5), Vector2(-21.25, 28.0),
+	Vector2(-23.75, 18.0), Vector2(-23.25, -2.0), Vector2(-24.25, -12.0),
+]
+
+# The two roads, each a line of points from far out in the woods to far out on the other side.
+const WALD_ROADS := [
+	[Vector2(34.0, -57.0), Vector2(15.25, -31.0), Vector2(11.75, -26.0), Vector2(6.75, -22.0), Vector2(2.75, -17.5),
+		Vector2(1.25, -12.0), Vector2(2.25, -3.5), Vector2(2.0, 8.0), Vector2(1.25, 29.5), Vector2(1.0, 66.0)],
+	[Vector2(50.0, -45.0), Vector2(24.25, -22.0), Vector2(20.25, -18.0), Vector2(16.25, -11.0), Vector2(14.25, -4.5),
+		Vector2(13.75, 8.0), Vector2(12.75, 31.0), Vector2(12.5, 66.0)],
+]
+const ROAD_WIDTH := 5.0
+
+# Solid buildings: [x, z, size x, size z, height].
+const WALD_HOUSES := [
+	[-18.0, -7.1, 11.5, 14.25, 6.0],
+	[-16.1, 20.9, 10.75, 15.75, 5.5],
+]
+# The building you can walk through: its outline and height, the door in its
+# south wall (x from, x to) and the exit in its east wall (z from, z to).
+const WALD_HALL := {"x0": -5.5, "x1": -0.6, "z0": -4.0, "z1": 10.5, "h": 4.2, "door": [-4.9, -3.4], "exit": [7.6, 9.4]}
+# The wall with the open door, between the south building and the hall.
+const WALD_WALL := [Vector2(-10.75, 13.0), Vector2(-5.5, 10.5)]
+
+const WALD_PROPS := [
+	# Site A.
+	["crate", -17.5, 3.0, 10], ["crate_small", -10.5, 4.0, 25], ["barrels", -20.5, 10.5, 0], ["pallets", -13.0, 11.0, 0],
+	# Site B.
+	["crate", 8.5, -12.5, -8], ["barrels", 10.0, -6.0, 0], ["crate_small", 15.0, -8.0, 15], ["pallets", 6.5, -8.5, 90],
+	# Between the roads.
+	["crate", 7.0, 6.0, 20], ["barrier", 8.0, 16.0, 0], ["crate_small", 9.5, 22.0, 0], ["barrels", 6.5, -1.5, 0],
+	# South of the wall, the north corridor, inside the hall.
+	["crate", -7.5, 18.0, 0], ["pallets", -3.0, 24.0, 90], ["crate", -9.0, -9.0, 0], ["crate_small", -2.5, 1.5, 0],
+	["crate_small", -4.3, -2.0, 30],
+	# Spawns.
+	["crate", -10.0, -19.0, 0], ["barrels", 18.0, 24.0, 0],
+]
+
+const WALD_NAV := {
+	"lanes": {
+		"left": [Vector2(10, 24), Vector2(2, 21), Vector2(-5, 17), Vector2(-8.1, 12.8)],
+		"mid_a": [Vector2(8, 20), Vector2(3, 10), Vector2(3, -2), Vector2(-3, -7.5)],
+		"mid_b": [Vector2(9, 20), Vector2(8, 8), Vector2(8, -1), Vector2(9, -6)],
+		"right": [Vector2(14, 22), Vector2(14, 8), Vector2(14.5, -2), Vector2(14, -6)],
+	},
+	"lane_site": {"left": 0, "mid_a": 0, "mid_b": 1, "right": 1},
+	"entries": [
+		{"left": [Vector2(-8.6, 11.0), Vector2(-12, 8)], "mid_a": [Vector2(-8, -3), Vector2(-12, 3)]},
+		{"mid_b": [Vector2(10, -8), Vector2(11.5, -9.5)], "right": [Vector2(13.5, -8), Vector2(12.5, -9.5)]},
+	],
+	"holds": [
+		[[Vector2(-20, 4), Vector2(-8, -3)], [Vector2(-11, 1), Vector2(-8.6, 11.0)], [Vector2(-19, 11), Vector2(-8.6, 11.0)],
+			[Vector2(-9, -6), Vector2(1, -6)]],
+		[[Vector2(7, -14), Vector2(13, 0)], [Vector2(17, -14), Vector2(8, 0)], [Vector2(10, -5), Vector2(9, 5)],
+			[Vector2(19, -9), Vector2(14, 5)]],
+	],
+	"forward": [[Vector2(-3, 15), Vector2(10, 24)], [Vector2(3, 0), Vector2(2, 20)], [Vector2(10, 2), Vector2(12, 20)],
+		[Vector2(-8, -10), Vector2(1, -8)]],
+	"postplant": [
+		[[Vector2(-18, 2), Vector2(-14, 7.5)], [Vector2(-8, -2), Vector2(-14, 7.5)], [Vector2(-9, 15), Vector2(-8.6, 11.0)]],
+		[[Vector2(6, -4), Vector2(11.75, -10)], [Vector2(16, -3), Vector2(11.75, -10)], [Vector2(5, -15), Vector2(11.75, -10)]],
+	],
+	"lurk": [[Vector2(-6, 19), Vector2(-8.6, 11.0)], [Vector2(2, -12), Vector2(-5, -8)], [Vector2(17, -19), Vector2(12, -10)],
+		[Vector2(-2.5, 7), Vector2(-4.1, 10.5)]],
+}
+
+
+func _build_wald() -> void:
+	var plaster := _plaster(Color(1.25, 1.2, 1.1))
+	var brick := _plaster(Color(1.05, 0.62, 0.48))
+	var trim := _flat(Color(0.28, 0.26, 0.24), 0.8)
+	var hole := _flat(Color(0.05, 0.05, 0.05), 1.0)
+	var roof := _flat(Color(0.3, 0.2, 0.16), 0.85)
+	# Forest outside the boundary, and trunks you can't walk through.
+	var forest := Forest.new()
+	var rng := RandomNumberGenerator.new()
+	rng.seed = 77
+	var poly := PackedVector2Array(WALD_BOUNDARY)
+	var tries := 0
+	while forest.spots.size() < 110 and tries < 5000:
+		tries += 1
+		var p := Vector2(rng.randf_range(-62.0, 62.0), rng.randf_range(-72.0, 72.0))
+		if Geometry2D.is_point_in_polygon(p, poly) or _edge_dist(p, poly) < 2.5 or _road_dist(p) < ROAD_WIDTH * 0.5 + 2.0:
+			continue
+		forest.spots.append([Vector3(p.x, 0.0, p.y), rng.randf() < 0.5])
+	add_child(forest)
+	for s: Array in forest.spots:
+		var trunk := CylinderShape3D.new()
+		trunk.radius = 0.45
+		trunk.height = 6.0
+		_static(trunk, Transform3D(Basis.IDENTITY, (s[0] as Vector3) + Vector3(0, 3.0, 0)))
+	# A ring of invisible walls well out in the woods: the edge of the world.
+	for side: Array in [[Vector3(0, 3, -80), Vector3(140, 6, 1)], [Vector3(0, 3, 80), Vector3(140, 6, 1)],
+			[Vector3(-70, 3, 0), Vector3(1, 6, 160)], [Vector3(70, 3, 0), Vector3(1, 6, 160)]]:
+		_static(_box_shape(side[1]), Transform3D(Basis.IDENTITY, side[0]))
+	_roads()
+	# The solid buildings.
+	var index := 0
+	for k: Array in WALD_HOUSES:
+		var size := Vector3(k[2], k[4], k[3])
+		var mat: StandardMaterial3D = brick if index == 0 else plaster
+		_mesh(_boxm(size), mat, Transform3D(Basis.IDENTITY, Vector3(k[0], size.y / 2.0, k[1])))
+		_static(_box_shape(size), Transform3D(Basis.IDENTITY, Vector3(k[0], size.y / 2.0, k[1])))
+		_mesh(_boxm(Vector3(size.x + 0.3, 0.25, size.z + 0.3)), trim, Transform3D(Basis.IDENTITY, Vector3(k[0], size.y + 0.12, k[1])))
+		_windows(Vector3(k[0], 0, k[1]), size, hole)
+		index += 1
+	_hall(plaster, trim, hole, roof)
+	_door_wall(brick, trim)
+	for p: Array in WALD_PROPS:
+		_prop(p[0], Vector3(p[1], 0, p[2]), p[3])
+
+
+func _boxm(size: Vector3) -> BoxMesh:
+	var b := BoxMesh.new()
+	b.size = size
+	return b
+
+
+func _edge_dist(p: Vector2, poly: PackedVector2Array) -> float:
+	var best := INF
+	for i in poly.size():
+		var q := Geometry2D.get_closest_point_to_segment(p, poly[i], poly[(i + 1) % poly.size()])
+		best = minf(best, p.distance_to(q))
+	return best
+
+
+func _road_dist(p: Vector2) -> float:
+	var best := INF
+	for road: Array in WALD_ROADS:
+		for i in road.size() - 1:
+			var q := Geometry2D.get_closest_point_to_segment(p, road[i], road[i + 1])
+			best = minf(best, p.distance_to(q))
+	return best
+
+
+# Asphalt with a dashed centre line and a pale edge line, from far in the woods
+# through the clearing and out again.
+func _roads() -> void:
+	var asphalt := StandardMaterial3D.new()
+	asphalt.albedo_texture = Assets.tex("hangar_concrete_floor_diffuse.jpg")
+	asphalt.albedo_color = Color(0.36, 0.36, 0.37)
+	asphalt.roughness = 0.9
+	asphalt.uv1_triplanar = true
+	asphalt.uv1_scale = Vector3.ONE * 0.4
+	var paint := _flat(Color(0.9, 0.88, 0.8), 0.7)
+	for road: Array in WALD_ROADS:
+		for i in road.size() - 1:
+			var a: Vector2 = road[i]
+			var b: Vector2 = road[i + 1]
+			var d := b - a
+			var length := d.length()
+			var basis := Basis(Vector3.UP, -d.angle())
+			var mid := (a + b) / 2.0
+			_mesh(_boxm(Vector3(length, 0.04, ROAD_WIDTH)), asphalt, Transform3D(basis, Vector3(mid.x, 0.02, mid.y)))
+			for side: float in [-1.0, 1.0]:
+				_mesh(_boxm(Vector3(length, 0.045, 0.12)), paint, Transform3D(basis, Vector3(mid.x, 0.022, mid.y) + basis * Vector3(0, 0, side * (ROAD_WIDTH / 2.0 - 0.35))))
+			var n := int(length / 3.0)
+			for k in n:
+				var t := (k + 0.5) / n
+				var at := a.lerp(b, t)
+				_mesh(_boxm(Vector3(1.4, 0.05, 0.13)), paint, Transform3D(basis, Vector3(at.x, 0.024, at.y)))
+		# Round joints so the bends have no gaps.
+		for pt: Vector2 in road:
+			var disc := CylinderMesh.new()
+			disc.top_radius = ROAD_WIDTH / 2.0
+			disc.bottom_radius = ROAD_WIDTH / 2.0
+			disc.height = 0.039
+			_mesh(disc, asphalt, Transform3D(Basis.IDENTITY, Vector3(pt.x, 0.0195, pt.y)))
+
+
+func _windows(at: Vector3, size: Vector3, hole: Material) -> void:
+	for side in 4:
+		var b := Basis(Vector3.UP, side * PI / 2.0)
+		var face: float = size.z if side % 2 == 0 else size.x
+		var along: float = size.x if side % 2 == 0 else size.z
+		var n := maxi(int(along / 3.0), 1)
+		for i in n:
+			var off := (float(i) - (n - 1) / 2.0) * along / n
+			for fy: float in [2.0, 4.4]:
+				if fy > size.y - 0.9:
+					continue
+				_mesh(_boxm(Vector3(1.0, 1.2, 0.04)), hole, Transform3D(b, at + Vector3(0, fy, 0) + b * Vector3(off, 0, face / 2.0 + 0.01)))
+
+
+# The hall: four walls, a roof, a door in the south wall and an exit in the east wall.
+func _hall(wall: Material, trim: Material, hole: Material, roof: Material) -> void:
+	var x0: float = WALD_HALL["x0"]
+	var x1: float = WALD_HALL["x1"]
+	var z0: float = WALD_HALL["z0"]
+	var z1: float = WALD_HALL["z1"]
+	var h: float = WALD_HALL["h"]
+	var door: Array = WALD_HALL["door"]
+	var exit: Array = WALD_HALL["exit"]
+	var t := 0.3
+	var pieces := []
+	# North and west walls whole; the south wall split by the door; the east wall by the exit.
+	pieces.append([Vector3((x0 + x1) / 2.0, h / 2.0, z0 + t / 2.0), Vector3(x1 - x0, h, t)])
+	pieces.append([Vector3(x0 + t / 2.0, h / 2.0, (z0 + z1) / 2.0), Vector3(t, h, z1 - z0)])
+	pieces.append([Vector3((x0 + door[0]) / 2.0, h / 2.0, z1 - t / 2.0), Vector3(door[0] - x0, h, t)])
+	pieces.append([Vector3((door[1] + x1) / 2.0, h / 2.0, z1 - t / 2.0), Vector3(x1 - door[1], h, t)])
+	pieces.append([Vector3((door[0] + door[1]) / 2.0, h - 0.6, z1 - t / 2.0), Vector3(door[1] - door[0], 1.2, t)])
+	pieces.append([Vector3(x1 - t / 2.0, h / 2.0, (z0 + exit[0]) / 2.0), Vector3(t, h, exit[0] - z0)])
+	pieces.append([Vector3(x1 - t / 2.0, h / 2.0, (exit[1] + z1) / 2.0), Vector3(t, h, z1 - exit[1])])
+	pieces.append([Vector3(x1 - t / 2.0, h - 0.6, (exit[0] + exit[1]) / 2.0), Vector3(t, 1.2, exit[1] - exit[0])])
+	for pc: Array in pieces:
+		_mesh(_boxm(pc[1]), wall, Transform3D(Basis.IDENTITY, pc[0]))
+		_static(_box_shape(pc[1]), Transform3D(Basis.IDENTITY, pc[0]))
+	var top := Vector3(x1 - x0 + 0.4, 0.25, z1 - z0 + 0.4)
+	var top_at := Vector3((x0 + x1) / 2.0, h + 0.12, (z0 + z1) / 2.0)
+	_mesh(_boxm(top), roof, Transform3D(Basis.IDENTITY, top_at))
+	_static(_box_shape(top), Transform3D(Basis.IDENTITY, top_at))
+	_mesh(_boxm(Vector3(top.x + 0.1, 0.1, top.z + 0.1)), trim, Transform3D(Basis.IDENTITY, top_at + Vector3(0, 0.15, 0)))
+	# A light inside, so it isn't pitch dark.
+	var lamp := OmniLight3D.new()
+	lamp.position = Vector3((x0 + x1) / 2.0, h - 0.6, (z0 + z1) / 2.0)
+	lamp.omni_range = 9.0
+	lamp.light_energy = 1.2
+	lamp.light_color = Color(1.0, 0.9, 0.75)
+	add_child(lamp)
+	# Windows on the west side, frames round the openings.
+	for z: float in [-1.0, 4.0]:
+		_mesh(_boxm(Vector3(0.04, 1.1, 1.2)), hole, Transform3D(Basis.IDENTITY, Vector3(x0 - 0.01, 2.0, z)))
+
+
+# The wall between the south building and the hall, its door standing open.
+func _door_wall(wall: Material, trim: Material) -> void:
+	var a: Vector2 = WALD_WALL[0]
+	var b: Vector2 = WALD_WALL[1]
+	var d := b - a
+	var length := d.length()
+	var basis := Basis(Vector3.UP, -d.angle())
+	var h := 3.0
+	var gap := 1.4
+	var gap_at := length * 0.5
+	for part: Array in [[0.0, gap_at - gap / 2.0], [gap_at + gap / 2.0, length]]:
+		var l: float = part[1] - part[0]
+		var c: Vector2 = a + d.normalized() * (float(part[0]) + l / 2.0)
+		var at := Vector3(c.x, h / 2.0, c.y)
+		_mesh(_boxm(Vector3(l, h, 0.35)), wall, Transform3D(basis, at))
+		_static(_box_shape(Vector3(l, h, 0.35)), Transform3D(basis, at))
+		_mesh(_boxm(Vector3(l + 0.04, 0.12, 0.42)), trim, Transform3D(basis, at + Vector3(0, h / 2.0 + 0.06, 0)))
+	# Lintel over the door.
+	var gc := a + d.normalized() * gap_at
+	_mesh(_boxm(Vector3(gap, 0.6, 0.35)), wall, Transform3D(basis, Vector3(gc.x, h - 0.3, gc.y)))
+	# The door leaf, swung open about its hinge on the left.
+	var hinge := a + d.normalized() * (gap_at - gap / 2.0)
+	var leaf_basis := basis * Basis(Vector3.UP, deg_to_rad(-105.0))
+	var leaf := _boxm(Vector3(gap - 0.08, 2.2, 0.06))
+	var wood := _flat(Color(0.36, 0.23, 0.13), 0.75)
+	var leaf_at := Vector3(hinge.x, 1.1, hinge.y) + leaf_basis * Vector3((gap - 0.08) / 2.0, 0, 0)
+	_mesh(leaf, wood, Transform3D(leaf_basis, leaf_at))
+	_static(_box_shape(Vector3(gap - 0.08, 2.2, 0.06)), Transform3D(leaf_basis, leaf_at))

@@ -216,6 +216,7 @@ func _start_round() -> void:
 
 
 func _physics_process(dt: float) -> void:
+	_bounds_check(dt)
 	if hud == null:
 		return
 	clock += dt
@@ -1052,3 +1053,39 @@ func _drive(dt: float) -> void:
 				p2["site"] = target_site
 				p2["hunt_after"] = plan["hunt_after"]
 				plans[b] = p2
+
+
+
+# Maps without an outer wall (Waldrand): leaving the play area brings up a
+# warning with a countdown, and staying out until it runs down is fatal.
+const OUT_TIME := 6.0
+var _out_t := 0.0
+var _out_label: Label
+
+
+func _bounds_check(dt: float) -> void:
+	if SdMap.BOUNDARY.is_empty() or player == null or hud == null:
+		return
+	var at := Vector2(player.global_position.x, player.global_position.z)
+	var outside := not Geometry2D.is_point_in_polygon(at, PackedVector2Array(SdMap.BOUNDARY))
+	if _out_label == null:
+		_out_label = Label.new()
+		_out_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		_out_label.set_anchors_preset(Control.PRESET_CENTER)
+		_out_label.position = Vector2(-500, -150)
+		_out_label.size = Vector2(1000, 120)
+		_out_label.add_theme_font_size_override("font_size", 40)
+		_out_label.add_theme_color_override("font_color", Color(1.0, 0.82, 0.25))
+		_out_label.add_theme_color_override("font_outline_color", Color(0, 0, 0, 0.9))
+		_out_label.add_theme_constant_override("outline_size", 8)
+		hud.add_child(_out_label)
+	var alive: bool = player.get("health") != null and float(player.get("health")) > 0.0
+	if outside and alive:
+		_out_t += dt
+		_out_label.visible = true
+		_out_label.text = "KEHRE ZURÜCK ZUM GESCHEHEN\n%d" % ceili(maxf(OUT_TIME - _out_t, 0.0))
+		if _out_t >= OUT_TIME:
+			player.hurt(9999.0, player.global_position)
+	else:
+		_out_t = 0.0
+		_out_label.visible = false
