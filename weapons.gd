@@ -76,10 +76,10 @@ const ATTACHMENTS := {
 		]},
 		{"slot": "visier", "label": "VISIER", "options": [
 			{"id": "zielfernrohr", "name": "Zielfernrohr", "text": "Starke Vergrößerung für große Distanzen.",
-				"set": {"optic": "sniper_optic_scope.bin", "scope": true, "eye_z": 0.184, "eye_r": 0.0196, "ads_z": -0.241, "ads_zoom": 0.9}, "mul": {},
+				"set": {"optic": "sniper_optic_scope.bin", "scope": true, "eye_z": 0.184, "eye_r": 0.0196, "ads_z": -0.232, "ads_zoom": 0.9}, "mul": {},
 				"zoom": [6.0, 8.0, 10.0, 12.0], "zoom_default": 8.0},
 			{"id": "kompakt", "name": "Kompaktvisier", "text": "Kürzer und leichter: schneller im Anschlag, weniger Zoom.",
-				"set": {"optic": "sniper_optic_compact.bin", "scope": true, "eye_z": 0.112, "eye_r": 0.0152, "ads_z": -0.158, "ads_zoom": 0.9}, "mul": {"ads_time": 0.82},
+				"set": {"optic": "sniper_optic_compact.bin", "scope": true, "eye_z": 0.112, "eye_r": 0.0152, "ads_z": -0.15, "ads_zoom": 0.9}, "mul": {"ads_time": 0.82},
 				"zoom": [3.0, 4.0, 5.0, 6.0], "zoom_default": 4.0},
 			{"id": "rotpunkt", "name": "Reflexvisier", "text": "Kein Zoom, freie Sicht. Am schnellsten im Anschlag.",
 				"set": {"optic": "sniper_optic_dot.bin", "scope": false, "sight_y": 0.066, "ads_z": -0.27, "ads_zoom": 0.78, "dot": Vector3(0, 0.066, -0.046)},
