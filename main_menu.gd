@@ -550,12 +550,16 @@ func _weapons_list() -> Control:
 	stats.add_child(stat_note)
 	# Weapon skins.
 	stats.add_child(_label("TARNUNG", 18, ACCENT))
-	var skins := HBoxContainer.new()
-	skins.add_theme_constant_override("separation", 8)
+	# Two rows of four, so new camos fit; the names come from the store's list.
+	var skins := GridContainer.new()
+	skins.columns = 4
+	skins.add_theme_constant_override("h_separation", 8)
+	skins.add_theme_constant_override("v_separation", 8)
 	var skin_group := ButtonGroup.new()
-	var skin_names: Array = ["Standard", "Wüste", "Wald", "Gold", "Arktis", "DAMATTER"]
+	var skin_names: Array = preload("res://pause_menu.gd").SKINS
 	for i in skin_names.size():
-		var sb := _entry(skin_names[i], Vector2(98, 44), 16, true)
+		var sb := _entry(skin_names[i], Vector2(124, 42), 16, true)
+		_tight(sb)
 		sb.button_group = skin_group
 		sb.pressed.connect(func() -> void:
 			store.set_skin(i)
