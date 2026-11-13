@@ -46,6 +46,10 @@ var showcase_parts: Array[MeshInstance3D] = []
 var showcase_metal: StandardMaterial3D
 var showcase_name: Label
 var lobby: Control
+var private_panel: Control
+var private_mode := "snd"
+var _private_maps: GridContainer
+var _private_snd: Control
 var music_slider: HSlider
 var play_info: Control
 var attach_note: Label         # shown instead of the editor button for weapons without attachments
@@ -251,6 +255,10 @@ func _page_play() -> Control:
 	left.add_child(_mode_card("bomb", "SUCHEN & ZERSTÖREN", "Hafen  ·  Bombe legen oder entschärfen  ·  bis 6 gegen 6", 84, 28, func() -> void:
 		play_info.visible = false
 		lobby.visible = true))
+	left.add_child(_mode_card("users", "PRIVATES SPIEL", "Modus und Karte selbst wählen  ·  alle Karten", 76, 26, func() -> void:
+		play_info.visible = false
+		lobby.visible = false
+		private_panel.visible = true))
 	left.add_child(_mode_card("pin", "TRAININGSPLATZ", "Bewegung und Waffen ausprobieren", 68, 22, _start_search.bind("range")))
 	var quit := _entry("BEENDEN", Vector2(600, 52), 20)
 	quit.icon = Icons.tex("back", 40)
@@ -274,6 +282,9 @@ func _page_play() -> Control:
 	lobby = _build_lobby()
 	lobby.visible = false
 	row.add_child(lobby)
+	private_panel = _build_private()
+	private_panel.visible = false
+	row.add_child(private_panel)
 	return row
 
 
@@ -454,10 +465,12 @@ func _build_lobby() -> Control:
 		line.add_child(plus)
 		box.add_child(line)
 	box.add_child(_label("KARTE", 18, ACCENT))
-	var maps := HBoxContainer.new()
-	maps.add_theme_constant_override("separation", 8)
+	var maps := GridContainer.new()
+	maps.columns = 2
+	maps.add_theme_constant_override("h_separation", 8)
+	maps.add_theme_constant_override("v_separation", 8)
 	var map_group := ButtonGroup.new()
-	for id: String in ["raffinerie", "hafen"]:
+	for id: String in SdMode.SdMap.MAP_NAMES:
 		var mb := _entry(SdMode.SdMap.MAP_NAMES[id], Vector2(258, 50), 20, true)
 		mb.button_group = map_group
 		mb.set_pressed_no_signal(SdMode.SdMap.current == id)
@@ -1267,3 +1280,128 @@ func close() -> void:
 	if frozen:
 		get_tree().paused = false
 		Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
+
+
+
+# --- private game ---------------------------------------------------------------
+# Pick the mode and the map yourself and start straight away, no search.
+# Search and Destroy plays on every S&D map (Raffinerie, Hafen, Altstadt,
+# Waldrand) with your own team sizes and bot strength; the other modes have
+# their own ground.
+const PRIVATE_MODES := [["snd", "Suchen & Zerstören"], ["duel", "1v1 me... Bot"], ["arena", "Freies Spiel"], ["range", "Trainingsplatz"]]
+const FIXED_MAPS := {"duel": "Frachthof", "arena": "Frachthof", "range": "Trainingsplatz"}
+
+
+func _build_private() -> Control:
+	var box := _panel(Vector2(560, 0))
+	box.add_child(_label("PRIVATES SPIEL", 24, ACCENT))
+	box.add_child(_label("MODUS", 18, ACCENT))
+	var modes := GridContainer.new()
+	modes.columns = 2
+	modes.add_theme_constant_override("h_separation", 8)
+	modes.add_theme_constant_override("v_separation", 8)
+	var mode_group := ButtonGroup.new()
+	for m: Array in PRIVATE_MODES:
+		var mb := _entry(m[1], Vector2(258, 42), 18, true)
+		mb.button_group = mode_group
+		mb.set_pressed_no_signal(private_mode == m[0])
+		var id: String = m[0]
+		mb.pressed.connect(func() -> void:
+			private_mode = id
+			_fill_private_maps())
+		modes.add_child(mb)
+	box.add_child(modes)
+	box.add_child(_label("KARTE", 18, ACCENT))
+	_private_maps = GridContainer.new()
+	_private_maps.columns = 2
+	_private_maps.add_theme_constant_override("h_separation", 8)
+	_private_maps.add_theme_constant_override("v_separation", 8)
+	box.add_child(_private_maps)
+	# Team sizes and bot strength, only for Search and Destroy: both counters on one line.
+	var snd := VBoxContainer.new()
+	snd.add_theme_constant_override("separation", 8)
+	var line := HBoxContainer.new()
+	line.add_theme_constant_override("separation", 6)
+	for row: Array in [["TEAM", "allies", 0, 5], ["GEGNER", "enemies", 1, 6]]:
+		var name_label := _label(row[0], 17, ACCENT)
+		var minus := _entry("-", Vector2(46, 42), 22)
+		var value := _label("", 20, Color.WHITE)
+		value.custom_minimum_size = Vector2(34, 0)
+		value.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		var plus := _entry("+", Vector2(46, 42), 22)
+		_tight(minus)
+		_tight(plus)
+		var key: String = row[1]
+		var lo: int = row[2]
+		var hi: int = row[3]
+		var show := func() -> void:
+			value.text = str(SdMode.allies if key == "allies" else SdMode.enemies)
+		minus.pressed.connect(func() -> void:
+			if key == "allies":
+				SdMode.allies = clampi(SdMode.allies - 1, lo, hi)
+			else:
+				SdMode.enemies = clampi(SdMode.enemies - 1, lo, hi)
+			show.call())
+		plus.pressed.connect(func() -> void:
+			if key == "allies":
+				SdMode.allies = clampi(SdMode.allies + 1, lo, hi)
+			else:
+				SdMode.enemies = clampi(SdMode.enemies + 1, lo, hi)
+			show.call())
+		show.call()
+		for c: Control in [name_label, minus, value, plus]:
+			line.add_child(c)
+		if key == "allies":
+			var gap := Control.new()
+			gap.custom_minimum_size = Vector2(18, 0)
+			line.add_child(gap)
+	snd.add_child(line)
+	var skills := HBoxContainer.new()
+	skills.add_theme_constant_override("separation", 8)
+	var group := ButtonGroup.new()
+	for pick: Array in [["Leicht", 0.6], ["Normal", 1.0], ["Schwer", 1.35]]:
+		var b := _entry(pick[0], Vector2(170, 42), 18, true)
+		b.button_group = group
+		b.set_pressed_no_signal(is_equal_approx(SdMode.skill, pick[1]))
+		var value: float = pick[1]
+		b.pressed.connect(func() -> void: SdMode.skill = value)
+		skills.add_child(b)
+	snd.add_child(skills)
+	_private_snd = snd
+	box.add_child(snd)
+	var buttons := HBoxContainer.new()
+	buttons.add_theme_constant_override("separation", 8)
+	var back := _entry("ZURÜCK", Vector2(160, 52), 18)
+	back.pressed.connect(func() -> void:
+		private_panel.visible = false
+		play_info.visible = true)
+	var start := _entry("STARTEN", Vector2(356, 52), 26)
+	start.pressed.connect(func() -> void:
+		private_panel.visible = false
+		play_info.visible = true
+		play.emit(private_mode))
+	buttons.add_child(back)
+	buttons.add_child(start)
+	box.add_child(buttons)
+	_fill_private_maps()
+	return box.get_meta("outer")
+
+
+func _fill_private_maps() -> void:
+	for c in _private_maps.get_children():
+		c.queue_free()
+	if _private_snd != null:
+		_private_snd.visible = private_mode == "snd"
+	var group := ButtonGroup.new()
+	if private_mode == "snd":
+		for id: String in SdMode.SdMap.MAP_NAMES:
+			var mb := _entry(SdMode.SdMap.MAP_NAMES[id], Vector2(258, 42), 18, true)
+			mb.button_group = group
+			mb.set_pressed_no_signal(SdMode.SdMap.current == id)
+			mb.pressed.connect(func() -> void: SdMode.SdMap.current = id)
+			_private_maps.add_child(mb)
+	else:
+		var only := _entry(FIXED_MAPS.get(private_mode, ""), Vector2(258, 42), 18, true)
+		only.button_group = group
+		only.set_pressed_no_signal(true)
+		_private_maps.add_child(only)

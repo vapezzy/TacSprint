@@ -2226,6 +2226,22 @@ func _run_flash_test() -> void:
 			await _save_view(o[2])
 		get_tree().quit(0)
 		return
+	if OS.get_cmdline_user_args().has("--privateshot"):
+		hud.visible = false
+		main_menu.open()
+		main_menu.show_tab(0)
+		await get_tree().create_timer(1.5).timeout
+		await _save_view("private_0")
+		main_menu.play_info.visible = false
+		main_menu.private_panel.visible = true
+		await get_tree().create_timer(0.6).timeout
+		await _save_view("private_1")
+		main_menu.private_mode = "duel"
+		main_menu._fill_private_maps()
+		await get_tree().create_timer(0.6).timeout
+		await _save_view("private_2")
+		get_tree().quit(0)
+		return
 	if OS.get_cmdline_user_args().has("--menushot"):
 		hud.visible = false
 		main_menu.open()
