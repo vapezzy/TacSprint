@@ -2473,6 +2473,23 @@ func _run_sd_test() -> void:
 		if sd != null:
 			break
 		await _wait(0.5)
+	if OS.get_cmdline_user_args().has("--spawnviews"):
+		# Four directions from each spawn, with the bots and the round held still.
+		for bot_node in sd.bots:
+			(bot_node as Node).process_mode = Node.PROCESS_MODE_DISABLED
+			(bot_node as Node3D).visible = false
+		sd.process_mode = Node.PROCESS_MODE_DISABLED
+		var k := 0
+		for spawn: Vector3 in [SdMap.ATTACK_SPAWN, SdMap.DEFEND_SPAWN]:
+			for yaw: float in [0.0, 90.0, 180.0, 270.0]:
+				player.global_position = spawn
+				player.yaw = deg_to_rad(yaw)
+				player.pitch = deg_to_rad(-3.0)
+				await _wait(0.45)
+				await _save_view("spawn_%d" % k)
+				k += 1
+		get_tree().quit(0)
+		return
 	if OS.get_cmdline_user_args().has("--maptour"):
 		# Fixed viewpoints round the map: [position, yaw degrees, pitch degrees].
 		var views := [[Vector3(0, 1.7, 29.0), 0.0, -2.0], [Vector3(-12, 1.7, 12.0), 5.0, 0.0], [Vector3(0, 1.7, 2.0), 180.0, 0.0],
