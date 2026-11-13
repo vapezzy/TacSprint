@@ -226,6 +226,8 @@ func _ready() -> void:
 		SdMap.use(SdMap.current)
 		var map := SdMap.new()
 		add_child(map)
+		if SdMap.current == "altstadt":
+			_blazing_sun.call_deferred()
 		add_child(player)
 		player.global_position = SdMap.ATTACK_SPAWN
 	else:
@@ -2467,6 +2469,23 @@ func blast_targets() -> Array:
 
 func _run_sd_test() -> void:
 	await _wait(1.0)
+	for i in 20:
+		if sd != null:
+			break
+		await _wait(0.5)
+	if OS.get_cmdline_user_args().has("--maptour"):
+		# Fixed viewpoints round the map: [position, yaw degrees, pitch degrees].
+		var views := [[Vector3(0, 1.7, 29.0), 0.0, -2.0], [Vector3(-12, 1.7, 12.0), 5.0, 0.0], [Vector3(0, 1.7, 2.0), 180.0, 0.0],
+			[Vector3(-15.5, 1.7, -10.0), 0.0, -8.0], [Vector3(15.5, 1.7, -10.0), 0.0, -8.0], [Vector3(6, 1.7, -2.0), 30.0, 12.0],
+			[Vector3(-20, 1.7, -27.0), -60.0, 2.0], [Vector3(10, 1.7, 20.0), 140.0, 4.0]]
+		for k in views.size():
+			player.global_position = views[k][0] - Vector3(0, 1.6, 0)
+			player.yaw = deg_to_rad(views[k][1])
+			player.pitch = deg_to_rad(views[k][2])
+			await _wait(1.2)
+			await _save_view("tour_%d" % k)
+		get_tree().quit(0)
+		return
 	# The test player only watches: the bomb goes to one of its team's bots, and the
 	# player waits out of the way.
 	player.global_position = Vector3(-3.5, 0.05, 32.5)
@@ -2727,3 +2746,26 @@ func _scope_env() -> void:
 			e.fog_height_density *= 0.5
 			scope_cam.environment = e
 			return
+
+
+
+# Altstadt: a blazing midday sun. A stronger, whiter sun, a clear sky with only
+# a few thin clouds, less haze, and the scope's copy of the air made again.
+func _blazing_sun() -> void:
+	if sun_light != null:
+		sun_light.light_energy *= 1.45
+		sun_light.light_color = Color(1.0, 0.985, 0.95)
+	for n in get_children():
+		if n is WorldEnvironment and (n as WorldEnvironment).environment != null:
+			var e: Environment = (n as WorldEnvironment).environment
+			e.fog_density *= 0.6
+			e.volumetric_fog_density *= 0.6
+			if e.sky != null and e.sky.sky_material is ShaderMaterial:
+				var sky := e.sky.sky_material as ShaderMaterial
+				sky.set_shader_parameter("coverage", 0.18)
+				sky.set_shader_parameter("cirrus", 0.25)
+				sky.set_shader_parameter("haze", 0.75)
+				# A bright, deep-blue midday sky instead of the darker default.
+				var energy = sky.get_shader_parameter("sky_energy")
+				sky.set_shader_parameter("sky_energy", (float(energy) if energy != null else 0.11) * 1.7)
+	_scope_env()
