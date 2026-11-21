@@ -17,8 +17,10 @@ const SdMode := preload("res://sd_mode.gd")
 const Icons := preload("res://icons.gd")
 const TAB_ICONS := ["play", "rifle", "grenade", "perk", "lan", "pad", "gear"]
 
-const ACCENT := Color(0.95, 0.62, 0.16)
-const DIM := Color(0.62, 0.66, 0.7)
+# Warm, muted war-film palette: worn gold and cream on dark charcoal.
+const ACCENT := Color(0.86, 0.71, 0.44)
+const DIM := Color(0.68, 0.64, 0.57)
+const CREAM := Color(0.95, 0.92, 0.85)
 const TABS := ["SPIELEN", "WAFFEN", "AUSRÜSTUNG", "PERKS", "LAN", "CONTROLLER", "EINSTELLUNGEN"]
 const LAN_PORT := 24565
 
@@ -97,13 +99,13 @@ func _init() -> void:
 
 func _ready() -> void:
 	var shade := ColorRect.new()
-	shade.color = Color(0.025, 0.03, 0.04, 0.12)
+	shade.color = Color(0.07, 0.05, 0.03, 0.3)
 	shade.set_anchors_preset(Control.PRESET_FULL_RECT)
 	add_child(shade)
 	# Darker towards the left, where the text sits.
 	var fade := TextureRect.new()
 	var g := Gradient.new()
-	g.colors = PackedColorArray([Color(0, 0, 0, 0.82), Color(0, 0, 0, 0.45), Color(0, 0, 0, 0.0)])
+	g.colors = PackedColorArray([Color(0.03, 0.025, 0.02, 0.9), Color(0.03, 0.025, 0.02, 0.55), Color(0, 0, 0, 0.0)])
 	g.offsets = PackedFloat32Array([0.0, 0.3, 0.55])
 	var gt := GradientTexture2D.new()
 	gt.gradient = g
@@ -134,7 +136,7 @@ func _ready() -> void:
 	var names := VBoxContainer.new()
 	names.add_theme_constant_override("separation", -6)
 	head.add_child(names)
-	names.add_child(_label("TAC SPRINT", 54, Color.WHITE))
+	names.add_child(_label("TAC SPRINT", 54, CREAM))
 	names.add_child(_label("TAKTISCHER  SHOOTER   ·   PROTOTYP", 15, DIM))
 
 	var tabs := HBoxContainer.new()
@@ -148,7 +150,7 @@ func _ready() -> void:
 		b.icon = Icons.tex(TAB_ICONS[i], 40)
 		b.add_theme_constant_override("icon_max_width", 20)
 		b.add_theme_constant_override("h_separation", 8)
-		b.add_theme_font_size_override("font_size", 20)
+		b.add_theme_font_size_override("font_size", 19)
 		b.custom_minimum_size = Vector2(0, 46)
 		b.pressed.connect(show_tab.bind(i))
 		tabs.add_child(b)
@@ -162,7 +164,7 @@ func _ready() -> void:
 		b.add_child(line)
 		tab_lines.append(line)
 	var rule := ColorRect.new()
-	rule.color = Color(1, 1, 1, 0.14)
+	rule.color = Color(0.86, 0.71, 0.44, 0.35)
 	rule.custom_minimum_size = Vector2(0, 2)
 	col.add_child(rule)
 
@@ -195,12 +197,16 @@ func _box(bg: Color, edge: Color, edge_width: int, angled := 0.0) -> StyleBoxFla
 	s.bg_color = bg
 	s.border_color = edge
 	s.border_width_left = edge_width
+	# A hairline frame all round, in a warm tone.
+	s.border_width_top = maxi(1, s.border_width_top)
+	s.border_width_bottom = 1
+	s.border_width_right = 1
 	s.set_content_margin_all(18)
 	s.content_margin_left = 22
-	# Cut at a slant, with a soft shadow: the look of current shooter menus.
-	s.skew = Vector2(angled, 0.0)
-	s.shadow_color = Color(0, 0, 0, 0.28)
-	s.shadow_size = 6
+	# Straight, square-cut panels with a soft shadow.
+	s.skew = Vector2(0.0, 0.0)
+	s.shadow_color = Color(0, 0, 0, 0.35)
+	s.shadow_size = 8
 	s.anti_aliasing = true
 	return s
 
@@ -215,10 +221,17 @@ func _entry(text: String, size: Vector2, font: int, toggle := false) -> Button:
 	b.alignment = HORIZONTAL_ALIGNMENT_LEFT
 	b.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	b.add_theme_font_size_override("font_size", font)
-	b.add_theme_stylebox_override("normal", _box(Color(0.05, 0.06, 0.08, 0.74), Color(1, 1, 1, 0.14), 3, 0.14))
-	b.add_theme_stylebox_override("hover", _box(Color(0.13, 0.14, 0.17, 0.92), ACCENT, 6, 0.14))
-	b.add_theme_stylebox_override("pressed", _box(Color(0.32, 0.21, 0.07, 0.92), ACCENT, 8, 0.14))
-	b.add_theme_stylebox_override("hover_pressed", _box(Color(0.36, 0.24, 0.08, 0.95), ACCENT, 8, 0.14))
+	var normal := _box(Color(0.075, 0.065, 0.055, 0.78), Color(0.86, 0.71, 0.44, 0.18), 1)
+	var hover := _box(Color(0.15, 0.125, 0.09, 0.9), ACCENT, 4)
+	var pressed := _box(Color(0.26, 0.205, 0.12, 0.93), ACCENT, 5)
+	var hover_pressed := _box(Color(0.3, 0.235, 0.14, 0.95), ACCENT, 5)
+	for sb: StyleBoxFlat in [hover, pressed, hover_pressed]:
+		sb.border_color = ACCENT
+	b.add_theme_stylebox_override("normal", normal)
+	b.add_theme_stylebox_override("hover", hover)
+	b.add_theme_stylebox_override("pressed", pressed)
+	b.add_theme_stylebox_override("hover_pressed", hover_pressed)
+	b.add_theme_color_override("font_color", CREAM)
 	b.add_theme_color_override("font_hover_color", Color.WHITE)
 	b.add_theme_color_override("font_pressed_color", Color.WHITE)
 	return b
@@ -226,10 +239,9 @@ func _entry(text: String, size: Vector2, font: int, toggle := false) -> Button:
 
 func _panel(min_size: Vector2) -> VBoxContainer:
 	var p := PanelContainer.new()
-	var glass := _box(Color(0.03, 0.04, 0.06, 0.78), ACCENT, 0)
-	glass.border_width_top = 3
-	glass.corner_radius_bottom_left = 6
-	glass.corner_radius_bottom_right = 6
+	var glass := _box(Color(0.06, 0.05, 0.04, 0.82), Color(0.86, 0.71, 0.44, 0.25), 0)
+	glass.border_width_top = 2
+	glass.border_color = ACCENT
 	p.add_theme_stylebox_override("panel", glass)
 	p.custom_minimum_size = min_size
 	p.size_flags_vertical = Control.SIZE_SHRINK_BEGIN
