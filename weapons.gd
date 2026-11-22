@@ -1,5 +1,7 @@
 extends RefCounted
 
+const MP7Assembly := preload("res://mp7_assembly.gd")
+
 # Every weapon of the class system. A class is one primary and one secondary.
 # All firearms share the pistol grip position, and the long guns share the
 # foregrip and magazine position, so one set of hand models fits them all.
@@ -9,7 +11,7 @@ extends RefCounted
 # when aiming. sight_y / ads_z: where the sight line sits and how far the
 # weapon is held from the eye when aiming. two_handed = false hides the support arm.
 
-const PRIMARY := ["smg", "ar", "sniper", "sniper2"]
+const PRIMARY := ["smg", "mp40", "mp7_v5", "ar", "sniper", "sniper2"]
 const SECONDARY := ["pistol", "knife"]
 
 const ALL := {
@@ -19,6 +21,22 @@ const ALL := {
 		"ads_zoom": 0.72, "ads_time": 0.25, "sight_y": 0.066, "ads_z": -0.4,
 		"muzzle": Vector3(0, 0.0, -0.47), "port": Vector3(0.026, 0.017, -0.03),
 		"two_handed": true, "scope": false, "melee": false, "hip_rot": Vector3.ZERO, "flash": 1.0,
+	},
+	"mp40": {
+		"name": "MP-40", "kind": "Maschinenpistole", "damage": 28.0, "mesh": "mp40.bin", "sfx": "smg", "kick": 1.4, "mag": "mp40_mag.bin", "mag_size": 32,
+		"interval": 0.12, "auto": true, "recoil": 0.85, "spread": 2.4, "reload": 2.5,
+		"ads_zoom": 0.74, "ads_time": 0.27, "sight_y": 0.048, "ads_z": -0.4,
+		"muzzle": Vector3(0, 0.006, -0.312), "port": Vector3(-0.02, 0.026, -0.03),
+		"two_handed": true, "scope": false, "melee": false, "hip_rot": Vector3.ZERO, "flash": 1.0,
+		"plain_hold": true,
+	},
+	"mp7_v5": {
+		"name": "MP7 V5", "kind": "Maschinenpistole", "damage": 24.0, "assembly": "mp7_v5", "sfx": "smg", "kick": 1.5, "mag": "", "mag_size": 40,
+		"interval": 0.075, "auto": true, "recoil": 1.0, "spread": 2.0, "reload": 2.1,
+		"ads_zoom": 0.72, "ads_time": 0.24, "sight_x": MP7Assembly.SIGHT_X, "sight_y": MP7Assembly.SIGHT_Y, "ads_z": MP7Assembly.ADS_Z,
+		"muzzle": MP7Assembly.MUZZLE, "port": MP7Assembly.PORT,
+		"two_handed": true, "scope": false, "melee": false, "hip_rot": Vector3.ZERO, "flash": 1.2, "plain_hold": true,
+		"hold_offset": Vector3(0.02, -0.02, 0.025),
 	},
 	"ar": {
 		"name": "KR-4", "kind": "Sturmgewehr", "damage": 30.0, "forward": 0.03, "mesh": "ar_body.bin", "sfx": "ar", "mag": "mag.bin", "mag_size": 30,

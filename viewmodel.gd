@@ -6,6 +6,7 @@ extends Node3D
 # line sits at y = SIGHT_Y.
 
 const Assets := preload("res://assets.gd")
+const MP7Assembly := preload("res://mp7_assembly.gd")
 
 const SIGHT_Y := 0.066
 const MUZZLE := Vector3(0, 0.0, -0.20)
@@ -48,6 +49,8 @@ var fx_side := false
 
 var _parent: Node3D
 var gun_part: MeshInstance3D
+var mp7_part: Node3D
+var mp7_variant := ""
 var left_hand_part: MeshInstance3D
 var right_hand_part: MeshInstance3D
 var right_sleeve_part: MeshInstance3D
@@ -238,10 +241,27 @@ func _init() -> void:
 # Swaps in another weapon from weapons.gd.
 # plain_hold: no foregrip fitted, so the support hand cups the fore-end from below.
 func set_weapon(w: Dictionary, plain_hold := false) -> void:
-	var file: String = w["mesh"]
-	if plain_hold and w.has("nogrip_mesh"):
-		file = w["nogrip_mesh"]
-	gun_part.mesh = Assets.mesh(file)
+	var assembly := str(w.get("assembly", ""))
+	if assembly != "":
+		if mp7_variant != assembly:
+			if mp7_part != null:
+				remove_child(mp7_part)
+				mp7_part.queue_free()
+			mp7_part = MP7Assembly.build(assembly)
+			if mp7_part == null:
+				return
+			add_child(mp7_part)
+			mp7_variant = assembly
+		mp7_part.visible = true
+		gun_part.visible = false
+	else:
+		if mp7_part != null:
+			mp7_part.visible = false
+		gun_part.visible = true
+		var file: String = w["mesh"]
+		if plain_hold and w.has("nogrip_mesh"):
+			file = w["nogrip_mesh"]
+		gun_part.mesh = Assets.mesh(file)
 	# Attachments: as many parts as the weapon's picks list.
 	var parts: Array = w.get("parts", [])
 	while extra_parts.size() < parts.size():
@@ -585,6 +605,11 @@ func _apply_give(arm: Node3D, hand: Vector3, give: Vector3) -> void:
 func set_fov(degrees: float) -> void:
 	for m: ShaderMaterial in [weapon_mat, cloth, flash_mat] + beam_mats + _device_mats:
 		m.set_shader_parameter("vm_fov", degrees)
+	if mp7_part != null:
+		for child: Node in mp7_part.find_children("*", "MeshInstance3D", true, false):
+			var mat := (child as MeshInstance3D).material_override as ShaderMaterial
+			if mat != null:
+				mat.set_shader_parameter("vm_fov", degrees)
 
 
 # Everything about the weapon and arms that moves, for the killcam to record...
